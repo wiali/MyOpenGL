@@ -1,0 +1,31 @@
+.vs/
+Debug NO_HP_SDK/
+Release NO_HP_SDK/
+GeneratedFiles/
+HP_Stage.aps
+*.user
+x64/
+Debug/
+worktools.pro.user*
+stage/HP_Stage.sdf
+stage/HP_Stage.v12.suo
+stage/Debug_NO_HP_SDK
+stage_viewer/moc*
+shared/moc*
+edit_functionality/moc*
+*qmake.stash
+*.autosave
+*debug*/
+*build*
+*.qm
+*.vcxproj*
+moc_*.cpp
+moc_*.h
+*.sln
+*.opt
+*.opendb
+*.db
+*.h.cpp
+*.ipch
+Capture_resource.rc
+CaptureStressTest_resource.rc
