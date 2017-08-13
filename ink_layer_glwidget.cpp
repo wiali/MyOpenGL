@@ -79,13 +79,13 @@ void InkLayerGLWidget::initializeGL()
 
     glEnable(GL_DEPTH_TEST);
 
-    //glEnable(GL_LINE_SMOOTH);
-    glShadeModel(GL_FLAT);//
-    //glEnable(GL_POINT_SMOOTH);
-    //glHint(GL_POINT_SMOOTH, GL_NICEST);
-    //glEnable(GL_POLYGON_SMOOTH);
-    //glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
-    //glEnable(GL_MULTISAMPLE);
+    glEnable(GL_LINE_SMOOTH);
+    //glShadeModel(GL_FLAT);
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH, GL_NICEST);
+    glEnable(GL_POLYGON_SMOOTH);
+    glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+    glEnable(GL_MULTISAMPLE);
 
     //glDisable(GL_LIGHT0);
     //glDisable(GL_LIGHTING);
