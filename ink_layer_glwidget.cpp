@@ -80,9 +80,9 @@ void InkLayerGLWidget::initializeGL()
     glEnable(GL_DEPTH_TEST);
 
     //glEnable(GL_LINE_SMOOTH);
-    glShadeModel(GL_FLAT);//
-    //glEnable(GL_POINT_SMOOTH);
-    //glHint(GL_POINT_SMOOTH, GL_NICEST);
+    //glShadeModel(GL_FLAT);//
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH, GL_NICEST);
     //glEnable(GL_POLYGON_SMOOTH);
     //glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
     //glEnable(GL_MULTISAMPLE);
@@ -102,8 +102,8 @@ void InkLayerGLWidget::initializeGL()
     //When you switch the Y-axis direction every front-face becomes a back-face, 
     //so that means you need to either disable face-culling or change the winding of the front-face.
     //glFrontFace(GL_BACK);
-    glDisable(GL_CULL_FACE);
-    glEnable(GL_FRONT_FACE);
+    //glDisable(GL_CULL_FACE);
+    //glEnable(GL_FRONT_FACE);
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex, this);
     static const char *vsrc =
@@ -140,11 +140,11 @@ void InkLayerGLWidget::initializeGL()
     m_program->bind();
 
     QMatrix4x4 m;
-    m.ortho(-0.5f, +0.5f, +0.5f, -0.5f, 4.0f, 15.0f);
+    m.ortho(0.0f, width(), height(), 0.0,  4.0f, 15.0f);
     m.translate(0.0f, 0.0f, -10.0f);
 
     //OpenGl coordinates is inverse Y with the window coordinates.
-    m.scale(1.0f, -1.0f, -1.0f);
+    //m.scale(1.0f, -1.0f, -1.0f);
 
     m_program->setUniformValue(m_matrixUniform, m);
 }
@@ -171,7 +171,11 @@ void InkLayerGLWidget::paintGL()
     for (auto line : m_all_lines)
         vertPoints.append(line.second);
 
-    int floatCounts = vertPoints.size();
+    display();
+    QVector<unsigned int> vertPoints1;
+    vertPoints1 = m_all_points;
+
+    int floatCounts = vertPoints1.size();
     int pointCounts = floatCounts / 3;
     QVector<GLfloat> vertColors(floatCounts);
     for (int i = 0; i < pointCounts; i += 3)
@@ -181,15 +185,15 @@ void InkLayerGLWidget::paintGL()
         vertColors[i * 3 + 2] = 0.0f;
     }
 
-    if (vertPoints.empty())
+    if (vertPoints1.empty())
     {
         //have to clockwise
         GLfloat vertData[] =
         {
-            -0.2f, -0.2f, 0.f,            
-            -0.2f, +0.2f, 0.f,            
-            +0.2f, +0.2f, 0.f,
-            +0.2f, -0.2f, 0.f,
+            100.0f, 200.0f, 0.f,
+            200.0f ,200.0f, 0.f,
+            200.0f, 400.f, 0.f,
+            400.0f, 400.f, 0.f,
         };
 
         GLfloat colors[] =
@@ -209,27 +213,21 @@ void InkLayerGLWidget::paintGL()
         pointCounts = 4;
     }
 
-    glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, &vertPoints[0]); //&vertPoints[0]
+    glVertexAttribPointer(m_posAttr, 3, GL_UNSIGNED_INT, GL_FALSE, 0, &vertPoints1[0]); //&vertPoints[0]
 
     glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, &vertColors[0]);
 
-    //float lineWidth[2];
-    //glGetFloatv(GL_LINE_WIDTH_RANGE, lineWidth);
-
-    //glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, vertData);
-    //glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, colors);
-
-    //glLineWidth(20.0f);
-    //glDrawArrays(GL_LINES, 0, 4);
+    glDrawArrays(GL_POINTS, 0, pointCounts);
 
     //glDrawArrays(GL_QUADS, 0, 4);
-    glDrawArrays(GL_QUADS, 0, pointCounts);
-}
+    //glDrawArrays(GL_QUADS, 0, pointCounts);
+    }
 
 void InkLayerGLWidget::resizeGL(int width, int height)
 {
     int side = qMin(width, height);
-    glViewport((width - side) / 2, (height - side) / 2, side, side);
+    //glViewport((width - side) / 2, (height - side) / 2, side, side);
+    glViewport(0, 0, width, height);
 }
 
 //void InkLayerGLWidget::mousePressEvent(QMouseEvent *event)
@@ -619,12 +617,14 @@ void InkLayerGLWidget::drawSmoothStroke(float pen_width, const QPointF& previous
 
 QVector3D InkLayerGLWidget::normalize(QVector3D& vec3)
 {
+    return vec3;
+
     float mat_width = width();
     float mat_height = height();
 
     vec3.setX( (vec3.x() - mat_width / 2.0) / mat_width);
-    //vec3.setY((mat_height - (mat_height / 2.0 - vec3.y())) / mat_height);
-    vec3.setY( (mat_height / 2.0 - vec3.y()) / mat_height);
+    //vec3.setY( (mat_height / 2.0 - vec3.y()) / mat_height);
+    vec3.setY((mat_height / 2.0 - vec3.y()) / mat_height);
 
     return vec3;
 }
@@ -791,11 +791,10 @@ void InkLayerGLWidget::mouseMoveEvent(QMouseEvent *event)
 //http://blog.csdn.net/qq_33951440/article/details/72823358
 
 #define PI 3.14159265359  
-int width, height;
 
 int line_style = 0;
 unsigned int pixel_mask[] = { 0xffff, 0xf0f00, 0xfff0, 0xf00 };
-int line_width = 1;
+int line_width = 10;
 
 void InkLayerGLWidget::initcor(int &dx, int &dy, int &x, int& y, int &p, int &xs, int &ys, int& xe, int& ye)
 {
@@ -811,7 +810,6 @@ void InkLayerGLWidget::myLine(int xs, int ys, int xe, int ye)
     // Write your code here  
     int dx, dy, x, y, p;
     initcor(dx, dy, x, y, p, xs, ys, xe, ye);
-    glBegin(GL_POINTS);
     unsigned int bit_mask = pixel_mask[line_style];
     for (int i = 0; i < dx; ++i)
     {
@@ -820,8 +818,13 @@ void InkLayerGLWidget::myLine(int xs, int ys, int xe, int ye)
             bit_mask = pixel_mask[line_style];
         if (bit_mask & 1)
         {
-            glVertex2i(x, y);
-            glVertex2i(y, x);
+            m_all_points.push_back(x);
+            m_all_points.push_back(y);
+            m_all_points.push_back(0);
+
+            m_all_points.push_back(y);
+            m_all_points.push_back(x);
+            m_all_points.push_back(0);
         }
         ++x;
         if (p < 0)
@@ -840,8 +843,13 @@ void InkLayerGLWidget::myLine(int xs, int ys, int xe, int ye)
             bit_mask = pixel_mask[line_style];
         if (bit_mask & 1)
         {
-            glVertex2i(x, y);
-            glVertex2i(y, x);
+            m_all_points.push_back(x);
+            m_all_points.push_back(y);
+            m_all_points.push_back(0);
+
+            m_all_points.push_back(y);
+            m_all_points.push_back(x);
+            m_all_points.push_back(0);
         }
         --x;
         if (p < 0)
@@ -861,8 +869,13 @@ void InkLayerGLWidget::myLine(int xs, int ys, int xe, int ye)
             bit_mask = pixel_mask[line_style];
         if (bit_mask & 1)
         {
-            glVertex2i(x, y);
-            glVertex2i(y, x);
+            m_all_points.push_back(x);
+            m_all_points.push_back(y);
+            m_all_points.push_back(0);
+
+            m_all_points.push_back(y);
+            m_all_points.push_back(x);
+            m_all_points.push_back(0);
         }
         ++x;
         if (p < 0)
@@ -881,8 +894,13 @@ void InkLayerGLWidget::myLine(int xs, int ys, int xe, int ye)
             bit_mask = pixel_mask[line_style];
         if (bit_mask & 1)
         {
-            glVertex2i(x, y);
-            glVertex2i(y, x);
+            m_all_points.push_back(x);
+            m_all_points.push_back(y);
+            m_all_points.push_back(0);
+
+            m_all_points.push_back(y);
+            m_all_points.push_back(x);
+            m_all_points.push_back(0);
         }
         --x;
         if (p < 0)
@@ -892,7 +910,6 @@ void InkLayerGLWidget::myLine(int xs, int ys, int xe, int ye)
             ++y; p += 2 * dy - 2 * dx;
         }
     }
-    glEnd();
 
 }
 
@@ -902,28 +919,82 @@ void InkLayerGLWidget::display()
     int i, x0, y0, x, y;
     double a;
 
-    glClear(GL_COLOR_BUFFER_BIT);
+    int width = this->width();
+    int height = this->height();
 
-    x0 = width() / 2;
-    y0 = height() / 2;
+    x0 = width / 2.0;
+    y0 = height / 2.0;
 
-    glColor3f(1.0, 1.0, 1.0);
+    lineWidthByDDA(0, 1, 100, 100, line_width);
+
+    //glColor3f(1.0, 1.0, 0.0);
 
     // Draw lines  
     for (i = 0; i < 360; i += 15)
     {
         a = (double)i / 180.0*PI;
-        x = 0.45*width()*cos(a);
-        y = 0.45*height()*sin(a);
+        x = 0.45*width*cos(a);
+        y = 0.45*height*sin(a);
         if (i == 0 || i == 180) y = 0;
         if (i == 90 || i == 270) x = 0;
         myLine(x0, y0, x0 + x, y0 + y);
+
+        //lineWidthByDDA(x0, y0, x0 + x, y0 + y, line_width);
         for (int j = 1; j < line_width; j++)
         {
-
-            myLine(x0, y0, x0 + x + j, y0 + y + j);
+            myLine(x0, y0, x0 + x + j, y0 + y + j);        
         }
     }
 
-    glFlush();
+    //glFlush();
+}
+
+
+void InkLayerGLWidget::lineWidthByDDA(int x0, int y0, int xEnd, int yEnd, int width)
+{
+    int dx = xEnd - x0;
+    int dy = yEnd - y0;
+    int steps, k;
+    float xIncrement, yIncrement, x = x0, y = y0;
+//    glEnable(GL_POINT_SMOOTH);
+    width -= 1;
+    int minWidth, maxWidth;
+    if (width % 2 == 0) {
+        minWidth = -width / 2;
+        maxWidth = width / 2;
+    }
+    else {
+        minWidth = -width / 2 - 1;
+        maxWidth = width / 2;
+    }
+    if (fabs(dx) > fabs(dy)) {
+        steps = fabs(dy);
+       
+        xIncrement = (float)(dx) / (float)(steps);
+        yIncrement = (float)(dy) / (float)(steps);
+        for (k = 0; k < steps; k++)
+        {
+            for (int i = minWidth; i <= maxWidth; i++) {
+                m_all_points.push_back(round(x));
+                m_all_points.push_back(round(y + i));
+                m_all_points.push_back(0);
+            }
+            x += xIncrement;
+            y += yIncrement;
+        }
+    }
+    else {
+        steps = fabs(dx);
+        xIncrement = (float)(dx) / (float)(steps);
+        yIncrement = (float)(dy) / (float)(steps);
+        for (k = 0; k < steps; k++)
+        {
+            for (int i = minWidth; i <= maxWidth; i++)
+            m_all_points.push_back(round(x+i));
+            m_all_points.push_back(round(y));
+            m_all_points.push_back(0);
+            x += xIncrement;
+            y += yIncrement;
+        }
+    }
 }

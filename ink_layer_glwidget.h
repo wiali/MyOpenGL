@@ -4,6 +4,7 @@
 #include <QOpenGLFunctions>
 #include <QOpenGLBuffer>
 
+
 #include "ink_data.h"
 
 QT_FORWARD_DECLARE_CLASS(QOpenGLShaderProgram);
@@ -159,7 +160,7 @@ private:
     void initcor(int &dx, int &dy, int &x, int& y, int &p, int &xs, int &ys, int& xe, int& ye);
     void myLine(int xs, int ys, int xe, int ye);
     void display();
-
+    void lineWidthByDDA(int x0, int y0, int xEnd, int yEnd, int width);
 private:
     GLuint m_posAttr;
     GLuint m_colAttr;
@@ -202,6 +203,8 @@ private:
     QSharedPointer<InkData> m_strokes;
 
     QVector<QPair<QColor, QVector<float>>> m_all_lines;
+
+    QVector<unsigned int> m_all_points;
 
     QPoint m_startPos;
     QPoint m_endPos;
