@@ -174,7 +174,7 @@ void InkLayerGLWidget::paintGL()
     int floatCounts = vertPoints.size();
     int pointCounts = floatCounts / 3;
     QVector<GLfloat> vertColors(floatCounts);
-    for (int i = 0; i < pointCounts; i += 3)
+    for (int i = 0; i < pointCounts; i++)
     {
         vertColors[i * 3] = 1.0f;
         vertColors[i * 3 + 1] = 1.0f;
@@ -360,6 +360,7 @@ QColor InkLayerGLWidget::color() const
 
 void InkLayerGLWidget::updatePixmap(const QRect& clipRect)
 {
+    return;
     if (m_strokes.isNull())
     {
         return;
@@ -604,7 +605,7 @@ void InkLayerGLWidget::drawSmoothStroke(float pen_width, const QPointF& previous
     QPointF adjust = (point + cc) / 2;
 
     // Not smooth enough! Do more process.
-    if ((adjust - cc).manhattanLength() > 1)    
+    if ((adjust - cc).manhattanLength() >1 )    
     {
         getTriangles(pen_width, c1, (c1 + adjust) / 2, tiangle_points);
         drawSmoothStroke(pen_width, c1, adjust, c2, tiangle_points);
@@ -732,10 +733,10 @@ void InkLayerGLWidget::draw(QSharedPointer<InkStroke> stroke, QPair<QColor, QVec
         {
             pen_width = stroke->getPoint(i).second*scale;
 
-            //drawSmoothStroke(pen_width,
-            //    QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale),
-            //    QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale),
-            //    QPointF(stroke->getPoint(i + 1).first.x()*scale, stroke->getPoint(i + 1).first.y()*scale), tiangle_points);
+            drawSmoothStroke(pen_width,
+                QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale),
+                QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale),
+                QPointF(stroke->getPoint(i + 1).first.x()*scale, stroke->getPoint(i + 1).first.y()*scale), tiangle_points);
 
             getTriangles(pen_width, QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale),
                 QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale), tiangle_points);
