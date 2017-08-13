@@ -638,7 +638,7 @@ void InkLayerGLWidget::getTriangles(float width, const QPointF& start, const QPo
     auto end1 = end;
 
     //auto start1 = QPointF(100, 100);
-    //auto end1 = QPointF(200, 100);
+    //auto end1 = QPointF(200, 200);
 
     //float angle = atan2(end.y() - start.y(), end.x() - start.x());
     //float t2sina1 = width * sin(angle);
@@ -684,8 +684,8 @@ void InkLayerGLWidget::getTriangles(float width, const QPointF& start, const QPo
     normalize(C);
     normalize(D);
 
-    //points << A.x() << A.y() << A.z() << B.x() << B.y() << B.z() << C.x() << C.y() << C.z() << D.x() << D.y() << D.z();
-    points << A.x() << A.y() << A.z() << D.x() << D.y() << D.z() << C.x() << C.y() << C.z() << B.x() << B.y() << B.z() ;
+    points << A.x() << A.y() << A.z() << B.x() << B.y() << B.z() << C.x() << C.y() << C.z() << D.x() << D.y() << D.z();
+    //points << A.x() << A.y() << A.z() << D.x() << D.y() << D.z() << C.x() << C.y() << C.z() << B.x() << B.y() << B.z() ;
 
 }
 
@@ -727,21 +727,21 @@ void InkLayerGLWidget::draw(QSharedPointer<InkStroke> stroke, QPair<QColor, QVec
         ptStart = QPointF(stroke->getPoint(0).first.x()*scale, stroke->getPoint(0).first.y()*scale);
         ptEnd = QPointF(ptStart + QPointF(stroke->getPoint(1).first.x()*scale, stroke->getPoint(1).first.y()*scale)) / 2;
 
-        getTriangles(pen_width, ptStart, ptEnd, tiangle_points);
+        //getTriangles(pen_width, ptStart, ptEnd, tiangle_points);
 
         for (int i = 1; i < ptCount - 1; i++)
         {
             pen_width = stroke->getPoint(i).second*scale;
 
-            drawSmoothStroke(pen_width,
-                QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale),
-                QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale),
-                QPointF(stroke->getPoint(i + 1).first.x()*scale, stroke->getPoint(i + 1).first.y()*scale), tiangle_points);
+            //drawSmoothStroke(pen_width,
+            //    QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale),
+            //    QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale),
+            //    QPointF(stroke->getPoint(i + 1).first.x()*scale, stroke->getPoint(i + 1).first.y()*scale), tiangle_points);
 
             getTriangles(pen_width, QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale),
                 QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale), tiangle_points);
 
-            getTriangles(pen_width, ptStart, ptEnd, tiangle_points);
+            //getTriangles(pen_width, ptStart, ptEnd, tiangle_points);
         }
 
         pen_width = (stroke->getPoint(ptCount - 2).second + stroke->getPoint(ptCount - 1).second) *scale / 2;
@@ -761,7 +761,7 @@ void InkLayerGLWidget::mousePressEvent(QMouseEvent *event)
     POINTER_PEN_INFO penInfo;
     penInfo.pointerInfo.ptPixelLocation.x = event->globalX();
     penInfo.pointerInfo.ptPixelLocation.y = event->globalY();
-    penInfo.pressure = BASE_PRESSURE * 4;
+    penInfo.pressure = BASE_PRESSURE * 1;
 
     emit penPressDown(penInfo);
 }
@@ -772,7 +772,7 @@ void InkLayerGLWidget::mouseReleaseEvent(QMouseEvent *event)
     POINTER_PEN_INFO penInfo;
     penInfo.pointerInfo.ptPixelLocation.x = event->globalX();
     penInfo.pointerInfo.ptPixelLocation.y = event->globalY();
-    penInfo.pressure = BASE_PRESSURE *4;
+    penInfo.pressure = BASE_PRESSURE *1;
     
     emit penPressUp(penInfo);
 }
@@ -783,7 +783,24 @@ void InkLayerGLWidget::mouseMoveEvent(QMouseEvent *event)
     POINTER_PEN_INFO penInfo;
     penInfo.pointerInfo.ptPixelLocation.x = event->globalX();
     penInfo.pointerInfo.ptPixelLocation.y = event->globalY();
-    penInfo.pressure = BASE_PRESSURE * 4;
+    penInfo.pressure = BASE_PRESSURE * 1;
 
     emit penMove(penInfo);
+}
+
+void draw_solid_circle(float x, float y, float radius)
+{
+    int count;
+    int sections = 200;
+
+    GLfloat TWOPI = 2.0f * 3.14159f;
+
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(x, y);
+
+    for (count = 0; count <= sections; count++)
+    {
+        glVertex2f(x + radius*cos(count*TWOPI / sections), y + radius*sin(count*TWOPI / sections));
+    }
+    glEnd();
 }
