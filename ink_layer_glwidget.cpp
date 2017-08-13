@@ -177,7 +177,7 @@ void InkLayerGLWidget::paintGL()
     int floatCounts = vertPoints.size();
     int pointCounts = floatCounts / 3;
     QVector<GLfloat> vertColors(floatCounts);
-    for (int i = 0; i < pointCounts; i += 3)
+    for (int i = 0; i < pointCounts; i++)
     {
         vertColors[i * 3] = 1.0f;
         vertColors[i * 3 + 1] = 1.0f;
