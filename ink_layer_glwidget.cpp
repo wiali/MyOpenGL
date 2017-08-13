@@ -79,8 +79,11 @@ void InkLayerGLWidget::initializeGL()
 
     glEnable(GL_DEPTH_TEST);
 
-    //glEnable(GL_LINE_SMOOTH);
-    glShadeModel(GL_FLAT);//
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH, GL_NICEST);
+    glEnable(GL_LINE_STIPPLE);
+
+    //glShadeModel(GL_FLAT);
     //glEnable(GL_POINT_SMOOTH);
     //glHint(GL_POINT_SMOOTH, GL_NICEST);
     //glEnable(GL_POLYGON_SMOOTH);
@@ -213,17 +216,14 @@ void InkLayerGLWidget::paintGL()
 
     glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, &vertColors[0]);
 
-    //float lineWidth[2];
-    //glGetFloatv(GL_LINE_WIDTH_RANGE, lineWidth);
+    float lineWidth[2];
+    glGetFloatv(GL_LINE_WIDTH_RANGE, lineWidth);
 
     //glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, vertData);
     //glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, colors);
 
-    //glLineWidth(20.0f);
-    //glDrawArrays(GL_LINES, 0, 4);
-
-    //glDrawArrays(GL_QUADS, 0, 4);
-    glDrawArrays(GL_QUADS, 0, pointCounts);
+    glLineWidth(10);
+    glDrawArrays(GL_LINES, 0, pointCounts);
 }
 
 void InkLayerGLWidget::resizeGL(int width, int height)
