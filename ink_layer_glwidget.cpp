@@ -81,8 +81,8 @@ void InkLayerGLWidget::initializeGL()
 
     //glEnable(GL_LINE_SMOOTH);
     //glShadeModel(GL_FLAT);//
-    glEnable(GL_POINT_SMOOTH);
-    glHint(GL_POINT_SMOOTH, GL_NICEST);
+    //glEnable(GL_POINT_SMOOTH);
+    //glHint(GL_POINT_SMOOTH, GL_NICEST);
     //glEnable(GL_POLYGON_SMOOTH);
     //glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
     //glEnable(GL_MULTISAMPLE);
@@ -178,7 +178,7 @@ void InkLayerGLWidget::paintGL()
     int floatCounts = vertPoints1.size();
     int pointCounts = floatCounts / 3;
     QVector<GLfloat> vertColors(floatCounts);
-    for (int i = 0; i < pointCounts; i += 3)
+    for (int i = 0; i < pointCounts; i++)
     {
         vertColors[i * 3] = 1.0f;
         vertColors[i * 3 + 1] = 1.0f;
@@ -925,7 +925,7 @@ void InkLayerGLWidget::display()
     x0 = width / 2.0;
     y0 = height / 2.0;
 
-    lineWidthByDDA(0, 1, 100, 100, line_width);
+    //lineWidthByDDA(0, 1, 100, 100, line_width);
 
     //glColor3f(1.0, 1.0, 0.0);
 
@@ -939,7 +939,7 @@ void InkLayerGLWidget::display()
         if (i == 90 || i == 270) x = 0;
         myLine(x0, y0, x0 + x, y0 + y);
 
-        //lineWidthByDDA(x0, y0, x0 + x, y0 + y, line_width);
+       //lineWidthByDDA(x0, y0, x0 + x, y0 + y, 11);
         for (int j = 1; j < line_width; j++)
         {
             myLine(x0, y0, x0 + x + j, y0 + y + j);        
