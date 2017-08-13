@@ -156,6 +156,10 @@ private:
 
     QVector3D normalize(QVector3D& vec3);
 
+    void initcor(int &dx, int &dy, int &x, int& y, int &p, int &xs, int &ys, int& xe, int& ye);
+    void myLine(int xs, int ys, int xe, int ye);
+    void display();
+
 private:
     GLuint m_posAttr;
     GLuint m_colAttr;
