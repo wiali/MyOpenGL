@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QOpenGLWidget>
-#include <QOpenGLFunctions_4_4_Core>
+#include <QOpenGLFunctions_2_0>
 #include <QOpenGLBuffer>
 
 #include "ink_data.h"
@@ -9,7 +9,7 @@
 QT_FORWARD_DECLARE_CLASS(QOpenGLShaderProgram);
 QT_FORWARD_DECLARE_CLASS(QOpenGLTexture);
 
-class InkLayerGLWidget : public QOpenGLWidget, protected QOpenGLFunctions_4_4_Core
+class InkLayerGLWidget : public QOpenGLWidget, public QOpenGLFunctions_2_0
 {
     Q_OBJECT
 

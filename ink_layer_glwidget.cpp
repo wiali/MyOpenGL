@@ -240,7 +240,7 @@ void InkLayerGLWidget::paintGL()
         // Draw current stroke
         auto currentStroke = m_strokes->currentStroke();
 
-        if (currentStroke->pointCount() > 0)
+        if (currentStroke->pointCount() > 1)
         {
             QPair<QColor, QVector<float>> lines;
             lines.second.reserve(10000);
@@ -307,12 +307,14 @@ void InkLayerGLWidget::paintGL()
         int plygonCount = m_polygonCounts.size();
         QVector<GLsizei> eachPolygonCounts;
         QVector<GLint> plygons_starts;
-        int nStart = 0;
+
+        plygons_starts << 0;
         for (int i = 0; i < plygonCount; i++)
         {
             eachPolygonCounts << m_polygonCounts[i];
-            plygons_starts << nStart;
-            nStart += m_polygonCounts[i];
+            
+            if(i != 0 )
+                plygons_starts <<  i* m_polygonCounts[i];
         }
 
         glMultiDrawArrays(GL_POLYGON, &plygons_starts[0], &eachPolygonCounts[0], plygonCount);
@@ -787,7 +789,7 @@ void InkLayerGLWidget::getTriangles(float width, const QPointF& start, const QPo
 void InkLayerGLWidget::draw(QSharedPointer<InkStroke> stroke, QPair<QColor, QVector<float>>& lines, bool mono, double scale )
 {
     int ptCount = stroke->pointCount();
-    if (ptCount == 0) return;
+    if (ptCount < 2) return;
 
     //QPair<QColor, QVector<float>> lines; //float[6] = start_x, start_y, end_x, end_y
 
@@ -814,7 +816,7 @@ void InkLayerGLWidget::draw(QSharedPointer<InkStroke> stroke, QPair<QColor, QVec
         {
             int previousSize = tiangle_points.size();
             draw_circle(smooth_point.x(), smooth_point.y(), pen_width / 2.0, tiangle_points);
-            m_polygonCounts << tiangle_points.size() - previousSize;
+            m_polygonCounts << (tiangle_points.size() - previousSize)/3;
         }
     }
 }
