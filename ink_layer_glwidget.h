@@ -166,7 +166,13 @@ private:
 
     QColor m_clearColor;
     QSharedPointer<QOpenGLShaderProgram> m_program;
-    QOpenGLBuffer m_vbo;
+
+    //QOpenGLBuffer m_vertex_vbo;
+    //QOpenGLBuffer m_color_vbo;
+
+    GLuint m_vertex_vbo;
+    GLuint m_color_vbo;
+
 
     QWidget* m_mockParent;
 
@@ -205,7 +211,10 @@ private:
     QPoint m_startPos;
     QPoint m_endPos;
 
+    QVector<GLfloat> m_vertPoints;
     QVector<GLfloat> m_vertColors;
 
     QVector<int> m_polygonCounts;
+
+    int m_vertex_index;
 };

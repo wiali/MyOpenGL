@@ -3,11 +3,12 @@
 #include <QOpenGLShaderProgram>
 #include <QOpenGLTexture>
 #include <QMouseEvent>
+#include <QTime>
 
 #define GL_GLEXT_PROTOTYPES
 
 const int PROGRAM_VERTEX_ATTRIBUTE = 0;
-const int PROGRAM_TEXCOORD_ATTRIBUTE = 1;
+const int PROGRAM_COLOR_ATTRIBUTE = 1;
 const int SMALL_PEN_SIZE = 10;
 const int ERASER_SIZE = 30;
 const int BASE_PRESSURE = (1024 / 2);
@@ -107,6 +108,7 @@ InkLayerGLWidget::InkLayerGLWidget(QWidget* mockParent, QWidget *parent)
     , m_mouseDrawing(false)
     , m_penPointColor(Qt::black)
     , m_strokes(new InkData())
+    , m_vertex_index(0)
 {
     setWindowFlags(Qt::SubWindow);
     setAutoFillBackground(false);
@@ -140,7 +142,7 @@ InkLayerGLWidget::InkLayerGLWidget(QWidget* mockParent, QWidget *parent)
 InkLayerGLWidget::~InkLayerGLWidget()
 {
     makeCurrent();
-    m_vbo.destroy();
+    //m_vbo.destroy();
     doneCurrent();
 }
 
@@ -156,14 +158,37 @@ void InkLayerGLWidget::initializeGL()
 
     //makeObject();
 
+    glGenBuffers(1, &m_vertex_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vertex_vbo);
+    m_vertPoints.resize(1000*3);
+    glBufferData(GL_ARRAY_BUFFER, m_vertPoints.size() * sizeof(float), m_vertPoints.data(), GL_DYNAMIC_COPY);
+
+    glGenBuffers(1, &m_color_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, m_color_vbo);
+    m_vertColors.resize(1000 * 3);
+    glBufferData(GL_ARRAY_BUFFER, m_vertColors.size() * sizeof(float), m_vertColors.data(), GL_DYNAMIC_COPY);
+
+
+    //m_vertex_vbo.create();
+    //m_vertex_vbo.setUsagePattern(QOpenGLBuffer::DynamicRead);
+    //m_vertex_vbo.bind();
+    //m_vertPoints.resize(100000*3);
+    //m_vertex_vbo.allocate(m_vertPoints.constData(), m_vertPoints.count() * sizeof(GLfloat));
+
+    //m_color_vbo.create();
+    //m_color_vbo.setUsagePattern(QOpenGLBuffer::DynamicRead);
+    //m_color_vbo.bind();
+    //m_vertColors.resize(100000*3);
+    //m_color_vbo.allocate(m_vertColors.constData(), m_vertColors.count() * sizeof(GLfloat));
+    
     glEnable(GL_DEPTH_TEST);
 
-    glEnable(GL_LINE_SMOOTH);
-    //glShadeModel(GL_FLAT);
-    glEnable(GL_POINT_SMOOTH);
-    glHint(GL_POINT_SMOOTH, GL_NICEST);
-    glEnable(GL_POLYGON_SMOOTH);
-    glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+    //glEnable(GL_LINE_SMOOTH);
+    ////glShadeModel(GL_FLAT);
+    //glEnable(GL_POINT_SMOOTH);
+    //glHint(GL_POINT_SMOOTH, GL_NICEST);
+    //glEnable(GL_POLYGON_SMOOTH);
+    //glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
     //glEnable(GL_MULTISAMPLE);
 
     //glDisable(GL_LIGHT0);
@@ -181,6 +206,7 @@ void InkLayerGLWidget::initializeGL()
     //When you switch the Y-axis direction every front-face becomes a back-face, 
     //so that means you need to either disable face-culling or change the winding of the front-face.
     //glFrontFace(GL_BACK);
+    
     glDisable(GL_CULL_FACE);
     glEnable(GL_FRONT_FACE);
 
@@ -207,13 +233,22 @@ void InkLayerGLWidget::initializeGL()
 
     m_program->addShader(vshader);
     m_program->addShader(fshader);
+
+    m_program->bindAttributeLocation("vertAttr", PROGRAM_VERTEX_ATTRIBUTE);
+    m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
+
+    m_program->bindAttributeLocation("colAttr", PROGRAM_COLOR_ATTRIBUTE);
+    m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
+
     m_program->link();
 
-    glEnableVertexAttribArray(PROGRAM_VERTEX_ATTRIBUTE);
-    glEnableVertexAttribArray(PROGRAM_TEXCOORD_ATTRIBUTE);
+    /*  glEnableVertexAttribArray(PROGRAM_VERTEX_ATTRIBUTE);
+      glEnableVertexAttribArray(PROGRAM_TEXCOORD_ATTRIBUTE);*/
 
-    m_posAttr = m_program->attributeLocation("vertAttr");
-    m_colAttr = m_program->attributeLocation("colAttr");
+    
+
+    //m_posAttr = m_program->attributeLocation("vertAttr");
+    //m_colAttr = m_program->attributeLocation("colAttr");
     m_matrixUniform = m_program->uniformLocation("matrix");
 
     m_program->bind();
@@ -233,6 +268,10 @@ void InkLayerGLWidget::paintGL()
     glClearColor(m_clearColor.redF(), m_clearColor.greenF(), m_clearColor.blueF(), m_clearColor.alphaF());
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    QTime time;
+    time.start();
+
+    bool bNewStroke = false;
     if (m_strokes)
     {
         //m_all_lines.clear();
@@ -242,35 +281,47 @@ void InkLayerGLWidget::paintGL()
 
         if (currentStroke->pointCount() > 1)
         {
+            m_vertex_index = 0;
+            m_polygonCounts.clear();
+
             QPair<QColor, QVector<float>> lines;
             lines.second.reserve(10000);
             draw(currentStroke, lines);
             m_all_lines << lines;
+            bNewStroke = true;
         }
+        qInfo() << "Aden1: " << time.elapsed();
     }
 
-    QVector<GLfloat> vertPoints;
-    for (auto line : m_all_lines)
-        vertPoints.append(line.second);
+    time.restart();
+    //QVector<GLfloat> vertPoints;
+    //for (auto line : m_all_lines)
+    //    vertPoints.append(line.second);
 
-    int floatCounts = vertPoints.size();
-    int pointCounts = floatCounts / 3;
+    qInfo() << "Aden2: " << time.elapsed();
 
-    if (floatCounts > m_vertColors.size())
+    time.restart();
+
+    int floatCounts = m_vertex_index;
+    int pointCounts = m_vertex_index / 3;
+
+    //if (floatCounts > m_vertColors.size())
     {
-        QVector<GLfloat> vertColors(floatCounts - m_vertColors.size());
-        int deltaCount = vertColors.size() / 3;
-        for (int i = 0; i < deltaCount; i++)
+        //QVector<GLfloat> vertColors(floatCounts - m_vertColors.size());
+        //int deltaCount = vertColors.size() / 3;
+        for (int i = 0; i < pointCounts; i++)
         {
-            vertColors[i * 3] = 1.0f;
-            vertColors[i * 3 + 1] = 1.0f;
-            vertColors[i * 3 + 2] = 0.0f;
+            m_vertColors[i * 3] = 1.0f;
+            m_vertColors[i * 3 + 1] = 1.0f;
+            m_vertColors[i * 3 + 2] = 0.0f;
         }
 
-        m_vertColors.append(vertColors);
+        //m_vertColors.append(vertColors);
     }
 
-    if (vertPoints.empty())
+    qInfo() << "Aden3: " << time.elapsed();
+
+    if (0)//vertPoints.empty())
     {
         //have to clockwise
         GLfloat vertData[] =
@@ -291,18 +342,24 @@ void InkLayerGLWidget::paintGL()
 
         for (int i = 0; i <12; i++)
         {
-            vertPoints << vertData[i];
+            m_vertPoints << vertData[i];
             m_vertColors << colors[i];
         }
 
         pointCounts = 4;
     }
 
-    glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, &vertPoints[0]);
+    time.restart();
 
-    glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, &m_vertColors[0]);
+    //glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, &m_vertPoints[0]);
 
-    if (pointCounts!=4)
+    //glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, &m_vertColors[0]);
+
+    qInfo() << "Aden4: " << time.elapsed();
+
+    time.restart();
+
+    if (m_vertex_index >0)
     {
         int plygonCount = m_polygonCounts.size();
         QVector<GLsizei> eachPolygonCounts;
@@ -317,10 +374,36 @@ void InkLayerGLWidget::paintGL()
                 plygons_starts <<  i* m_polygonCounts[i];
         }
 
+        qInfo() << "Aden5: " << time.elapsed();
+
+        time.restart();
+
+        glBindBuffer(GL_ARRAY_BUFFER, m_vertex_vbo);
+
+        //m_vertex_vbo.bind();
+        m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
+        m_program->setAttributeBuffer(PROGRAM_VERTEX_ATTRIBUTE, GL_FLOAT, 0, 3);
+
+        //m_color_vbo.bind();
+        glBindBuffer(GL_ARRAY_BUFFER, m_color_vbo);
+        m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
+        m_program->setAttributeBuffer(PROGRAM_COLOR_ATTRIBUTE, GL_FLOAT, 0, 3);
+
         glMultiDrawArrays(GL_POLYGON, &plygons_starts[0], &eachPolygonCounts[0], plygonCount);
+
+        //glDrawElements(
+        //    GL_POLYGON,      // mode
+        //    plygonCount,    // count
+        //    GL_UNSIGNED_INT,   // type
+        //    (void*)0           // element array buffer offset
+        //);
+
+        qInfo() << "Aden6: " << time.elapsed();
     }
     else
         glDrawArrays( GL_POLYGON, 0, pointCounts);
+
+
 }
 
 void InkLayerGLWidget::resizeGL(int width, int height)
@@ -370,9 +453,9 @@ void InkLayerGLWidget::makeObject()
         vertData.append(coords_pos[i][2]);
     }
 
-    m_vbo.create();
-    m_vbo.bind();
-    m_vbo.allocate(vertData.constData(), vertData.count() * sizeof(GLfloat));
+    //m_vbo.create();
+    //m_vbo.bind();
+    //m_vbo.allocate(vertData.constData(), vertData.count() * sizeof(GLfloat));
 }
 
 
@@ -801,7 +884,7 @@ void InkLayerGLWidget::draw(QSharedPointer<InkStroke> stroke, QPair<QColor, QVec
 
     lines.first = color;
 
-    QVector<float>& tiangle_points = lines.second;
+    QVector<float>& tiangle_points = m_vertPoints;
     float pen_width;
 
     for (int i = 1; i < ptCount; i++)
@@ -812,11 +895,12 @@ void InkLayerGLWidget::draw(QSharedPointer<InkStroke> stroke, QPair<QColor, QVec
         auto ptEnd = QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale);
 
         QVector<QPointF> smoothPts = plot_line(ptStart, ptEnd, pen_width / 2.0);//interpolation
+
         for (auto smooth_point : smoothPts)
         {
-            int previousSize = tiangle_points.size();
+            int previousSize = m_vertex_index;
             draw_circle(smooth_point.x(), smooth_point.y(), pen_width / 2.0, tiangle_points);
-            m_polygonCounts << (tiangle_points.size() - previousSize)/3;
+            m_polygonCounts << (m_vertex_index - previousSize)/3;
         }
     }
 }
@@ -901,19 +985,31 @@ void InkLayerGLWidget::plot_circle(int xm, int ym, int r, QVector<float>& polygo
     do {
         QVector3D vert;
         vert = QVector3D(xm - x, ym + y, 0);
-        normalize(vert);
-        polygon << vert.x() << vert.y() << vert.z(); /*   I. Quadrant */
+        normalize(vert);        
+        polygon[m_vertex_index++] = vert.x();
+        polygon[m_vertex_index++] = vert.y();
+        polygon[m_vertex_index++] = vert.z(); /*   I. Quadrant */
+
         vert = QVector3D(xm - y, ym - x, 0);
         normalize(vert);
-        polygon << vert.x() << vert.y() << vert.z(); /*  II. Quadrant */
+        polygon[m_vertex_index++] = vert.x();
+        polygon[m_vertex_index++] = vert.y();
+        polygon[m_vertex_index++] = vert.z(); /*  II. Quadrant */
+
         vert = QVector3D(xm + x, ym - y, 0);
         normalize(vert);
-        polygon << vert.x() << vert.y() << vert.z(); /* III. Quadrant */
+        polygon[m_vertex_index++] = vert.x();
+        polygon[m_vertex_index++] = vert.y();
+        polygon[m_vertex_index++] = vert.z(); /*  III. Quadrant */
+
         vert = QVector3D(xm + y, ym + x, 0);
         normalize(vert);
-        polygon << vert.x() << vert.y() << vert.z(); /*  IV. Quadrant */
+        polygon[m_vertex_index++] = vert.x();
+        polygon[m_vertex_index++] = vert.y();
+        polygon[m_vertex_index++] = vert.z(); /*  IV. Quadrant */
+
         r = err;
-        if (r > x) err += ++x * 2 + 1; /* e_xy+e_x > 0 */
-        if (r <= y) err += ++y * 2 + 1; /* e_xy+e_y < 0 */
+        if (r > x) err += ++x * 6 + 1; /* e_xy+e_x > 0 */
+        if (r <= y) err += ++y * 6 + 1; /* e_xy+e_y < 0 */
     } while (x < 0);
 }
