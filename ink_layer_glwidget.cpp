@@ -4,11 +4,91 @@
 #include <QOpenGLTexture>
 #include <QMouseEvent>
 
+#define GL_GLEXT_PROTOTYPES
+
 const int PROGRAM_VERTEX_ATTRIBUTE = 0;
 const int PROGRAM_TEXCOORD_ATTRIBUTE = 1;
 const int SMALL_PEN_SIZE = 10;
 const int ERASER_SIZE = 30;
 const int BASE_PRESSURE = (1024 / 2);
+
+const int CIRCLE_POINTS_NUM = 100;
+const float EPSILON = 0.00001;
+
+
+
+QVector<QPointF> plot_line(QPointF a, QPointF b, float width)
+{
+    QVector<QPointF> ret;
+
+    int x0 = a.x();
+    int y0 = a.y();
+    int x1 = b.x();
+    int y1 = b.y();
+
+    int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy, e2; /* error value e_xy */
+
+    for (;;) {  /* loop */
+        ret.push_back(QPointF(x0, y0));
+        if (x0 == x1 && y0 == y1) break;
+        e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; } /* e_xy+e_x > 0 */
+        if (e2 <= dx) { err += dx; y0 += sy; } /* e_xy+e_y < 0 */
+    }
+
+    return ret;
+}
+
+QVector<QPointF> interpolation(QPointF a, QPointF b, float width)
+{
+    //width = 2;
+    QVector<QPointF> ret;
+
+    int dx = b.x() - a.x();
+    int dy = b.y() - a.y();
+
+    if (abs(dx) < width && abs(dy) < width)
+    {
+        ret.push_back(a);
+        ret.push_back(b);
+        return ret;
+    }
+
+    QPointF temp;
+
+    bool xDirection = false;
+    bool yDirection = false;
+    float slop_x = 0.0f;
+    float slop_y = 0.0f;
+    if (abs(dy) < EPSILON)
+    {
+        slop_x = dx > 0 ? 1.0 : -1.0;
+        xDirection = true;
+    }
+    if (abs(dx) < EPSILON)
+    {
+        slop_y = dy > 0 ? 1.0 : -1.0;
+        yDirection = true;
+    }
+
+    if (!xDirection && !yDirection)
+    {
+        slop_x = dx > 0 ? 1.0 : -1.0;
+        slop_y = (dy > 0 ? 1.0 : -1.0) * fabs(1.0 * dy / dx);
+    }
+
+    int steps = xDirection ? dx : yDirection ? dy : dx;
+
+    for (int i = 0; i < abs(steps); i+= width)
+    {
+        QPointF c(a.x() + i*slop_x, a.y() + i*slop_y);
+        ret.push_back(c);
+    }
+    
+    return ret;
+}
 
 InkLayerGLWidget::InkLayerGLWidget(QWidget* mockParent, QWidget *parent)
     : QOpenGLWidget(parent),
@@ -55,7 +135,6 @@ InkLayerGLWidget::InkLayerGLWidget(QWidget* mockParent, QWidget *parent)
         this, SLOT(onPenMove(const POINTER_PEN_INFO&)));
 
     setInkData(m_strokes);
-
 }
 
 InkLayerGLWidget::~InkLayerGLWidget()
@@ -85,7 +164,7 @@ void InkLayerGLWidget::initializeGL()
     glHint(GL_POINT_SMOOTH, GL_NICEST);
     glEnable(GL_POLYGON_SMOOTH);
     glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
-    glEnable(GL_MULTISAMPLE);
+    //glEnable(GL_MULTISAMPLE);
 
     //glDisable(GL_LIGHT0);
     //glDisable(GL_LIGHTING);
@@ -156,12 +235,15 @@ void InkLayerGLWidget::paintGL()
 
     if (m_strokes)
     {
+        //m_all_lines.clear();
+        //m_polygonCounts.clear();
         // Draw current stroke
         auto currentStroke = m_strokes->currentStroke();
 
         if (currentStroke->pointCount() > 0)
         {
             QPair<QColor, QVector<float>> lines;
+            lines.second.reserve(10000);
             draw(currentStroke, lines);
             m_all_lines << lines;
         }
@@ -173,12 +255,19 @@ void InkLayerGLWidget::paintGL()
 
     int floatCounts = vertPoints.size();
     int pointCounts = floatCounts / 3;
-    QVector<GLfloat> vertColors(floatCounts);
-    for (int i = 0; i < pointCounts; i++)
+
+    if (floatCounts > m_vertColors.size())
     {
-        vertColors[i * 3] = 1.0f;
-        vertColors[i * 3 + 1] = 1.0f;
-        vertColors[i * 3 + 2] = 0.0f;
+        QVector<GLfloat> vertColors(floatCounts - m_vertColors.size());
+        int deltaCount = vertColors.size() / 3;
+        for (int i = 0; i < deltaCount; i++)
+        {
+            vertColors[i * 3] = 1.0f;
+            vertColors[i * 3 + 1] = 1.0f;
+            vertColors[i * 3 + 2] = 0.0f;
+        }
+
+        m_vertColors.append(vertColors);
     }
 
     if (vertPoints.empty())
@@ -203,27 +292,33 @@ void InkLayerGLWidget::paintGL()
         for (int i = 0; i <12; i++)
         {
             vertPoints << vertData[i];
-            vertColors << colors[i];
+            m_vertColors << colors[i];
         }
 
         pointCounts = 4;
     }
 
-    glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, &vertPoints[0]); //&vertPoints[0]
+    glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, &vertPoints[0]);
 
-    glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, &vertColors[0]);
+    glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, &m_vertColors[0]);
 
-    //float lineWidth[2];
-    //glGetFloatv(GL_LINE_WIDTH_RANGE, lineWidth);
+    if (pointCounts!=4)
+    {
+        int plygonCount = m_polygonCounts.size();
+        QVector<GLsizei> eachPolygonCounts;
+        QVector<GLint> plygons_starts;
+        int nStart = 0;
+        for (int i = 0; i < plygonCount; i++)
+        {
+            eachPolygonCounts << m_polygonCounts[i];
+            plygons_starts << nStart;
+            nStart += m_polygonCounts[i];
+        }
 
-    //glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, vertData);
-    //glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, colors);
-
-    //glLineWidth(20.0f);
-    //glDrawArrays(GL_LINES, 0, 4);
-
-    //glDrawArrays(GL_QUADS, 0, 4);
-    glDrawArrays(GL_QUADS, 0, pointCounts);
+        glMultiDrawArrays(GL_POLYGON, &plygons_starts[0], &eachPolygonCounts[0], plygonCount);
+    }
+    else
+        glDrawArrays( GL_POLYGON, 0, pointCounts);
 }
 
 void InkLayerGLWidget::resizeGL(int width, int height)
@@ -706,50 +801,21 @@ void InkLayerGLWidget::draw(QSharedPointer<InkStroke> stroke, QPair<QColor, QVec
 
     QVector<float>& tiangle_points = lines.second;
     float pen_width;
-    auto bound = stroke->boundRect();
 
-    if ((bound.width() < 10 && bound.height() < 10) || ptCount < 2)
+    for (int i = 1; i < ptCount; i++)
     {
-        float width = 0.0;
-        for (int i = 0; i < ptCount; i++)
+        pen_width = stroke->getPoint(i).second*scale;
+
+        auto ptStart = QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale);
+        auto ptEnd = QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale);
+
+        QVector<QPointF> smoothPts = plot_line(ptStart, ptEnd, pen_width / 2.0);//interpolation
+        for (auto smooth_point : smoothPts)
         {
-            width += stroke->getPoint(i).second;
+            int previousSize = tiangle_points.size();
+            draw_circle(smooth_point.x(), smooth_point.y(), pen_width / 2.0, tiangle_points);
+            m_polygonCounts << tiangle_points.size() - previousSize;
         }
-        pen_width = width / ptCount;
-
-        getTriangles(pen_width, bound.center(), bound.center(), tiangle_points);
-    }
-    else
-    {
-        QPointF ptStart, ptEnd;
-        pen_width = ((stroke->getPoint(0).second + stroke->getPoint(1).second) / 2)*scale;
-
-        ptStart = QPointF(stroke->getPoint(0).first.x()*scale, stroke->getPoint(0).first.y()*scale);
-        ptEnd = QPointF(ptStart + QPointF(stroke->getPoint(1).first.x()*scale, stroke->getPoint(1).first.y()*scale)) / 2;
-
-        //getTriangles(pen_width, ptStart, ptEnd, tiangle_points);
-
-        for (int i = 1; i < ptCount - 1; i++)
-        {
-            pen_width = stroke->getPoint(i).second*scale;
-
-            //drawSmoothStroke(pen_width,
-            //    QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale),
-            //    QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale),
-            //    QPointF(stroke->getPoint(i + 1).first.x()*scale, stroke->getPoint(i + 1).first.y()*scale), tiangle_points);
-
-            getTriangles(pen_width, QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale),
-                QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale), tiangle_points);
-
-            //getTriangles(pen_width, ptStart, ptEnd, tiangle_points);
-        }
-
-        pen_width = (stroke->getPoint(ptCount - 2).second + stroke->getPoint(ptCount - 1).second) *scale / 2;
-
-        ptEnd = QPointF(stroke->getPoint(ptCount - 1).first.x()*scale, stroke->getPoint(ptCount - 1).first.y()*scale);
-        ptStart = QPointF(QPointF(stroke->getPoint(ptCount - 2).first.x()*scale, stroke->getPoint(ptCount - 2).first.y()*scale) + ptEnd) / 2;
-        
-        getTriangles(pen_width, ptStart, ptEnd, tiangle_points);
     }
 }
 
@@ -803,4 +869,49 @@ void draw_solid_circle(float x, float y, float radius)
         glVertex2f(x + radius*cos(count*TWOPI / sections), y + radius*sin(count*TWOPI / sections));
     }
     glEnd();
+}
+
+void InkLayerGLWidget::draw_circle(float x, float y, float radius, QVector<float>& polygon)
+{
+    plot_circle(x, y, radius, polygon);
+    return;
+
+    static const float angle = 2.0f * 3.1416f / (CIRCLE_POINTS_NUM-1);
+
+    double angle1=0.0;
+    QVector3D point(x+radius * cos(0.0), y+radius * sin(0.0), 0.0f);
+    normalize(point);
+    polygon << point.x() << point.y() << point.z();
+    for (int i=0; i<CIRCLE_POINTS_NUM-1; i++)
+    {
+        point = QVector3D(x+radius * cos(angle1), y+radius *sin(angle1), 0.0f);
+        normalize(point);
+        polygon << point.x() << point.y() << point.z();
+        angle1 += angle;
+    }
+}
+
+
+
+void InkLayerGLWidget::plot_circle(int xm, int ym, int r, QVector<float>& polygon)
+{
+    int x = -r, y = 0, err = 2 - 2 * r; /* II. Quadrant */
+    do {
+        QVector3D vert;
+        vert = QVector3D(xm - x, ym + y, 0);
+        normalize(vert);
+        polygon << vert.x() << vert.y() << vert.z(); /*   I. Quadrant */
+        vert = QVector3D(xm - y, ym - x, 0);
+        normalize(vert);
+        polygon << vert.x() << vert.y() << vert.z(); /*  II. Quadrant */
+        vert = QVector3D(xm + x, ym - y, 0);
+        normalize(vert);
+        polygon << vert.x() << vert.y() << vert.z(); /* III. Quadrant */
+        vert = QVector3D(xm + y, ym + x, 0);
+        normalize(vert);
+        polygon << vert.x() << vert.y() << vert.z(); /*  IV. Quadrant */
+        r = err;
+        if (r > x) err += ++x * 2 + 1; /* e_xy+e_x > 0 */
+        if (r <= y) err += ++y * 2 + 1; /* e_xy+e_y < 0 */
+    } while (x < 0);
 }

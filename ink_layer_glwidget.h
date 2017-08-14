@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QOpenGLWidget>
-#include <QOpenGLFunctions>
+#include <QOpenGLFunctions_4_4_Core>
 #include <QOpenGLBuffer>
 
 #include "ink_data.h"
@@ -9,7 +9,7 @@
 QT_FORWARD_DECLARE_CLASS(QOpenGLShaderProgram);
 QT_FORWARD_DECLARE_CLASS(QOpenGLTexture);
 
-class InkLayerGLWidget : public QOpenGLWidget, protected QOpenGLFunctions
+class InkLayerGLWidget : public QOpenGLWidget, protected QOpenGLFunctions_4_4_Core
 {
     Q_OBJECT
 
@@ -156,6 +156,9 @@ private:
 
     QVector3D normalize(QVector3D& vec3);
 
+    void draw_circle(float x, float y, float radius, QVector<float>& polygon);
+    void plot_circle(int xm, int ym, int r, QVector<float>& polygon);
+
 private:
     GLuint m_posAttr;
     GLuint m_colAttr;
@@ -201,4 +204,8 @@ private:
 
     QPoint m_startPos;
     QPoint m_endPos;
+
+    QVector<GLfloat> m_vertColors;
+
+    QVector<int> m_polygonCounts;
 };
