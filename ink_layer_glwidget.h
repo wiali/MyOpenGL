@@ -154,7 +154,7 @@ private:
 
     void getTriangles(float width, const QPointF& start, const QPointF& end, QVector<float>& points);
 
-    QVector3D normalize(QVector3D& vec3);
+    QVector2D normalize(QVector2D& vec3);
 
     void draw_circle(float x, float y, float radius);
     void plot_circle(int xm, int ym, int r);

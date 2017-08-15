@@ -161,7 +161,7 @@ void InkLayerGLWidget::initializeGL()
     m_vertex_vbo.create();
     m_vertex_vbo.setUsagePattern(QOpenGLBuffer::DynamicCopy);
     m_vertex_vbo.bind();
-    m_vertPoints.resize(VBO_SIZE * 3);
+    m_vertPoints.resize(VBO_SIZE * 2);
     m_vertex_vbo.allocate(m_vertPoints.constData(), m_vertPoints.count() * sizeof(GLfloat));
 
     m_color_vbo.create();
@@ -278,8 +278,6 @@ void InkLayerGLWidget::paintGL()
             m_vertex_index = 0;
             m_polygonCounts.clear();
 
-            QPair<QColor, QVector<float>> lines;
-            lines.second.reserve(1000000);
             draw(currentStroke);
         }
         qInfo() << "Aden1: " << time.elapsed();
@@ -295,7 +293,7 @@ void InkLayerGLWidget::paintGL()
     time.restart();
 
     int floatCounts = m_vertex_index;
-    int pointCounts = m_vertex_index / 3;
+    int pointCounts = m_vertex_index / 2;
 
     //if (floatCounts > m_vertColors.size())
     {
@@ -373,7 +371,7 @@ void InkLayerGLWidget::paintGL()
         m_vertex_vbo.bind();
         m_vertex_vbo.write(0, &m_vertPoints[0], m_vertPoints.count() * sizeof(GLfloat));
         m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
-        m_program->setAttributeBuffer(PROGRAM_VERTEX_ATTRIBUTE, GL_FLOAT, 0, 3);
+        m_program->setAttributeBuffer(PROGRAM_VERTEX_ATTRIBUTE, GL_FLOAT, 0, 2);
 
         m_color_vbo.bind();
         m_color_vbo.write(0, &m_vertColors[0], m_vertColors.count() * sizeof(GLfloat));
@@ -779,7 +777,7 @@ void InkLayerGLWidget::drawSmoothStroke(float pen_width, const QPointF& previous
     }
 }
 
-QVector3D InkLayerGLWidget::normalize(QVector3D& vec3)
+QVector2D InkLayerGLWidget::normalize(QVector2D& vec3)
 {
     float mat_width = width();
     float mat_height = height();
@@ -814,13 +812,13 @@ void InkLayerGLWidget::getTriangles(float width, const QPointF& start, const QPo
     //https://stackoverflow.com/questions/101718/drawing-a-variable-width-line-in-opengl-no-gllinewidth
     // find line between p1 and p2
 
-    QVector3D p1(start1.x(), start1.y(),0);
-    QVector3D p2(end1.x(), end1.y(),0);
+    QVector2D p1(start1.x(), start1.y());
+    QVector2D p2(end1.x(), end1.y());
 
-    QVector3D lineP1P2 = p2 - p1;
+    QVector2D lineP1P2 = p2 - p1;
     //if we define dx = x2 - x1 and dy = y2 - y1, then the normals are(-dy, dx) and (dy, -dx).
 
-    QVector3D vNormal = QVector3D(lineP1P2.y(), -1.0*lineP1P2.x(), lineP1P2.z());
+    QVector2D vNormal = QVector2D(lineP1P2.y(), -1.0*lineP1P2.x());
     vNormal.normalize();
 
     //ABCD conter clockwise
@@ -845,7 +843,7 @@ void InkLayerGLWidget::getTriangles(float width, const QPointF& start, const QPo
     normalize(C);
     normalize(D);
 
-    points << A.x() << A.y() << A.z() << B.x() << B.y() << B.z() << C.x() << C.y() << C.z() << D.x() << D.y() << D.z();
+    points << A.x() << A.y() << B.x() << B.y() << C.x() << C.y() << D.x() << D.y();
     //points << A.x() << A.y() << A.z() << D.x() << D.y() << D.z() << C.x() << C.y() << C.z() << B.x() << B.y() << B.z() ;
 
 }
@@ -874,13 +872,17 @@ void InkLayerGLWidget::draw(QSharedPointer<InkStroke> stroke, bool mono, double 
         auto ptStart = QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale);
         auto ptEnd = QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale);
 
-        QVector<QPointF> smoothPts = plot_line(ptStart, ptEnd, pen_width / 2.0);//interpolation
-
-        for (auto smooth_point : smoothPts)
+        //QPointF vector = ptEnd - ptStart;
+        //if (vector.manhattanLength() > pen_width/2.0)
         {
-            int previousSize = m_vertex_index;
-            draw_circle(smooth_point.x(), smooth_point.y(), pen_width / 2.0);
-            m_polygonCounts << (m_vertex_index - previousSize)/3;
+            QVector<QPointF> smoothPts = plot_line(ptStart, ptEnd, pen_width / 2.0);//interpolation
+
+            for (auto smooth_point : smoothPts)
+            {
+                int previousSize = m_vertex_index;
+                draw_circle(smooth_point.x(), smooth_point.y(), pen_width / 2.0);
+                m_polygonCounts << (m_vertex_index - previousSize) / 2;
+            }
         }
     }
 }
@@ -945,15 +947,15 @@ void InkLayerGLWidget::draw_circle(float x, float y, float radius)
     static const float angle = 2.0f * 3.1416f / (CIRCLE_POINTS_NUM-1);
 
     double angle1=0.0;
-    QVector3D point(x+radius * cos(0.0), y+radius * sin(0.0), 0.0f);
+    QVector2D point(x+radius * cos(0.0), y+radius * sin(0.0));
     normalize(point);
     QVector<float> polygon;
-    polygon << point.x() << point.y() << point.z();
+    polygon << point.x() << point.y();
     for (int i=0; i<CIRCLE_POINTS_NUM-1; i++)
     {
-        point = QVector3D(x+radius * cos(angle1), y+radius *sin(angle1), 0.0f);
+        point = QVector2D(x+radius * cos(angle1), y+radius *sin(angle1));
         normalize(point);
-        polygon << point.x() << point.y() << point.z();
+        polygon << point.x() << point.y();
         angle1 += angle;
     }
 }
@@ -964,33 +966,29 @@ void InkLayerGLWidget::plot_circle(int xm, int ym, int r)
 {
     int x = -r, y = 0, err = 2 - 2 * r; /* II. Quadrant */
     do {
-        QVector3D vert;
-        vert = QVector3D(xm - x, ym + y, 0);
+        QVector2D vert;
+        vert = QVector2D(xm - x, ym + y);
         normalize(vert);        
         m_vertPoints[m_vertex_index++] = vert.x();
-        m_vertPoints[m_vertex_index++] = vert.y();
-        m_vertPoints[m_vertex_index++] = vert.z(); /*   I. Quadrant */
+        m_vertPoints[m_vertex_index++] = vert.y(); /*   I. Quadrant */
 
-        vert = QVector3D(xm - y, ym - x, 0);
+        vert = QVector2D(xm - y, ym - x);
         normalize(vert);
         m_vertPoints[m_vertex_index++] = vert.x();
-        m_vertPoints[m_vertex_index++] = vert.y();
-        m_vertPoints[m_vertex_index++] = vert.z(); /*  II. Quadrant */
+        m_vertPoints[m_vertex_index++] = vert.y(); /*  II. Quadrant */
 
-        vert = QVector3D(xm + x, ym - y, 0);
+        vert = QVector2D(xm + x, ym - y);
         normalize(vert);
         m_vertPoints[m_vertex_index++] = vert.x();
-        m_vertPoints[m_vertex_index++] = vert.y();
-        m_vertPoints[m_vertex_index++] = vert.z(); /*  III. Quadrant */
+        m_vertPoints[m_vertex_index++] = vert.y(); /*  III. Quadrant */
 
-        vert = QVector3D(xm + y, ym + x, 0);
+        vert = QVector2D(xm + y, ym + x);
         normalize(vert);
         m_vertPoints[m_vertex_index++] = vert.x();
-        m_vertPoints[m_vertex_index++] = vert.y();
-        m_vertPoints[m_vertex_index++] = vert.z(); /*  IV. Quadrant */
+        m_vertPoints[m_vertex_index++] = vert.y(); /*  IV. Quadrant */
 
         r = err;
-        if (r > x) err += ++x * 2 + 1; /* e_xy+e_x > 0 */
-        if (r <= y) err += ++y * 2 + 1; /* e_xy+e_y < 0 */
+        if (r > x) err += ++x * 5 + 1; /* e_xy+e_x > 0 */
+        if (r <= y) err += ++y * 5 + 1; /* e_xy+e_y < 0 */
     } while (x < 0);
 }
