@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QOpenGLWidget>
-#include <QOpenGLFunctions_2_0>
+#include <QOpenGLFunctions_4_0_Core>
 #include <QOpenGLBuffer>
 
 #include "ink_data.h"
@@ -9,7 +9,7 @@
 QT_FORWARD_DECLARE_CLASS(QOpenGLShaderProgram);
 QT_FORWARD_DECLARE_CLASS(QOpenGLTexture);
 
-class InkLayerGLWidget : public QOpenGLWidget, public QOpenGLFunctions_2_0
+class InkLayerGLWidget : public QOpenGLWidget, public QOpenGLFunctions_4_0_Core
 {
     Q_OBJECT
 
@@ -147,7 +147,7 @@ private:
     // Add current stroke to the list
     void addStroke();
 
-    void draw(QSharedPointer<InkStroke> stroke, QPair<QColor, QVector<float>>& lines, bool mono = false, double scale = 1.0);
+    void draw(QSharedPointer<InkStroke> stroke, bool mono = false, double scale = 1.0);
 
     void drawSmoothStroke(float pen_width, const QPointF& previous, const QPointF& point,
         const QPointF& next, QVector<float>& tiangle_points);
@@ -156,8 +156,8 @@ private:
 
     QVector3D normalize(QVector3D& vec3);
 
-    void draw_circle(float x, float y, float radius, QVector<float>& polygon);
-    void plot_circle(int xm, int ym, int r, QVector<float>& polygon);
+    void draw_circle(float x, float y, float radius);
+    void plot_circle(int xm, int ym, int r);
 
 private:
     GLuint m_posAttr;
@@ -167,11 +167,11 @@ private:
     QColor m_clearColor;
     QSharedPointer<QOpenGLShaderProgram> m_program;
 
-    //QOpenGLBuffer m_vertex_vbo;
-    //QOpenGLBuffer m_color_vbo;
+    QOpenGLBuffer m_vertex_vbo;
+    QOpenGLBuffer m_color_vbo;
 
-    GLuint m_vertex_vbo;
-    GLuint m_color_vbo;
+    //GLuint m_vertex_vbo;
+    //GLuint m_color_vbo;
 
 
     QWidget* m_mockParent;
@@ -205,8 +205,6 @@ private:
 
     // Ink data
     QSharedPointer<InkData> m_strokes;
-
-    QVector<QPair<QColor, QVector<float>>> m_all_lines;
 
     QPoint m_startPos;
     QPoint m_endPos;
