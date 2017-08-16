@@ -215,4 +215,6 @@ private:
     QVector<int> m_polygonCounts;
 
     int m_vertex_index;
+
+    QSharedPointer<QOpenGLTexture> m_textures;
 };

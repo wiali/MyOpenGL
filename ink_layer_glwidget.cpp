@@ -17,6 +17,33 @@ const int CIRCLE_POINTS_NUM = 100;
 const float EPSILON = 0.00001;
 const int VBO_SIZE = 1000000;
 
+QString loadProgram(QString fileLocation)
+{
+    QFile file(fileLocation);
+    file.open(QFile::ReadOnly);
+    return file.readAll();
+}
+
+QString vertexProgram()
+{
+    return loadProgram("./assets/shaders/lines.vert");
+}
+
+QString fragProgram()
+{
+    return loadProgram("./assets/shaders/lines.frag");
+}
+
+QString geomProgram()
+{
+    return loadProgram("./assets/shaders/lines1.geom");
+}
+
+QImage loadTexture()
+{
+    return QImage("./assets/textures/pattern1.png");
+}
+
 
 QVector<QPointF> plot_line(QPointF a, QPointF b, float width)
 {
@@ -157,6 +184,7 @@ void InkLayerGLWidget::initializeGL()
     initializeOpenGLFunctions();
 
     //makeObject();
+    m_textures = QSharedPointer<QOpenGLTexture>::create(loadTexture());
 
     m_vertex_vbo.create();
     m_vertex_vbo.setUsagePattern(QOpenGLBuffer::DynamicCopy);
@@ -206,28 +234,20 @@ void InkLayerGLWidget::initializeGL()
     glEnable(GL_FRONT_FACE);
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex, this);
-    static const char *vsrc =
-        "attribute highp vec4 vertAttr;\n"
-        "attribute lowp vec4 colAttr;\n"
-        "varying lowp vec4 col;\n"
-        "uniform highp mat4 matrix;\n"
-        "void main() {\n"
-        "   col = colAttr;\n"
-        "   gl_Position = matrix * vertAttr;\n"
-        "}\n";
-
+    static const char *vsrc = vertexProgram().toStdString().c_str();
     vshader->compileSourceCode(vsrc);
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment, this);
-    static const char *fsrc =
-        "varying lowp vec4 col;\n"
-        "void main() {\n"
-        "   gl_FragColor = col;\n"
-        "}\n";
+    static const char *fsrc = fragProgram().toStdString().c_str();
     fshader->compileSourceCode(fsrc);
+
+    QOpenGLShader *gshader = new QOpenGLShader(QOpenGLShader::Geometry, this);
+    static const char *gsrc = geomProgram().toStdString().c_str();
+    gshader->compileSourceCode(gsrc);
 
     m_program->addShader(vshader);
     m_program->addShader(fshader);
+    m_program->addShader(gshader);
 
     m_program->bindAttributeLocation("vertAttr", PROGRAM_VERTEX_ATTRIBUTE);
     m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
@@ -377,6 +397,8 @@ void InkLayerGLWidget::paintGL()
         m_color_vbo.write(0, &m_vertColors[0], m_vertColors.count() * sizeof(GLfloat));
         m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
         m_program->setAttributeBuffer(PROGRAM_COLOR_ATTRIBUTE, GL_FLOAT, 0, 3);
+
+        m_textures->bind();
 
         glMultiDrawArrays(GL_POLYGON, &plygons_starts[0], &eachPolygonCounts[0], plygonCount);
 
