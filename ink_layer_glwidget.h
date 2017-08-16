@@ -159,16 +159,23 @@ private:
     void draw_circle(float x, float y, float radius);
     void plot_circle(int xm, int ym, int r);
 
+    void render();
+
 private:
     GLuint m_posAttr;
     GLuint m_colAttr;
     GLuint m_matrixUniform;
+
+    GLuint	m_win_scale;		// the size of the viewport in pixels
+    GLuint	m_miter_limit;	// 1.0: always miter, -1.0: never miter, 0.75: default
+    GLuint	m_thickness;		// the thickness of the line in pixels
 
     QColor m_clearColor;
     QSharedPointer<QOpenGLShaderProgram> m_program;
 
     QOpenGLBuffer m_vertex_vbo;
     QOpenGLBuffer m_color_vbo;
+    QOpenGLBuffer m_mesh_vbo;
 
     //GLuint m_vertex_vbo;
     //GLuint m_color_vbo;
@@ -217,4 +224,6 @@ private:
     int m_vertex_index;
 
     QSharedPointer<QOpenGLTexture> m_textures;
+    QVector<QVector3D> m_vertices;
+    QVector<uint16_t> m_indices;
 };

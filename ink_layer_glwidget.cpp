@@ -204,6 +204,12 @@ void InkLayerGLWidget::initializeGL()
     }
     m_color_vbo.allocate(m_vertColors.constData(), m_vertColors.count() * sizeof(GLfloat));
 
+    m_mesh_vbo.create();
+    m_mesh_vbo.setUsagePattern(QOpenGLBuffer::DynamicCopy);
+    m_mesh_vbo.bind();
+    m_vertices.resize(VBO_SIZE * 3);
+    m_mesh_vbo.allocate(m_vertices.constData(), m_vertices.count() * sizeof(QVector3D));
+
     glEnable(GL_DEPTH_TEST);
 
     //glEnable(GL_LINE_SMOOTH);
@@ -243,27 +249,30 @@ void InkLayerGLWidget::initializeGL()
 
     QOpenGLShader *gshader = new QOpenGLShader(QOpenGLShader::Geometry, this);
     static const char *gsrc = geomProgram().toStdString().c_str();
+
     gshader->compileSourceCode(gsrc);
 
     m_program->addShader(vshader);
     m_program->addShader(fshader);
     m_program->addShader(gshader);
 
-    m_program->bindAttributeLocation("vertAttr", PROGRAM_VERTEX_ATTRIBUTE);
+    m_program->bindAttributeLocation("ciPosition", PROGRAM_VERTEX_ATTRIBUTE);
     m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
 
-    m_program->bindAttributeLocation("colAttr", PROGRAM_COLOR_ATTRIBUTE);
-    m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
+    //m_program->bindAttributeLocation("colAttr", PROGRAM_COLOR_ATTRIBUTE);
+    //m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
 
     m_program->link();
 
     /*  glEnableVertexAttribArray(PROGRAM_VERTEX_ATTRIBUTE);
       glEnableVertexAttribArray(PROGRAM_TEXCOORD_ATTRIBUTE);*/
-
     
 
     //m_posAttr = m_program->attributeLocation("vertAttr");
     //m_colAttr = m_program->attributeLocation("colAttr");
+    m_win_scale = m_program->uniformLocation("WIN_SCALE");
+    m_miter_limit = m_program->uniformLocation("MITER_LIMIT");
+    m_thickness = m_program->uniformLocation("THICKNESS");
     m_matrixUniform = m_program->uniformLocation("matrix");
 
     m_program->bind();
@@ -276,6 +285,9 @@ void InkLayerGLWidget::initializeGL()
     m.scale(1.0f, -1.0f, -1.0f);
 
     m_program->setUniformValue(m_matrixUniform, m);
+    m_program->setUniformValue(m_win_scale, size());
+    m_program->setUniformValue(m_miter_limit, 0.75f);
+    m_program->setUniformValue(m_thickness, 50.0f);    
 }
 
 void InkLayerGLWidget::paintGL()
@@ -298,7 +310,8 @@ void InkLayerGLWidget::paintGL()
             m_vertex_index = 0;
             m_polygonCounts.clear();
 
-            draw(currentStroke);
+            //draw(currentStroke);
+            render();
         }
         qInfo() << "Aden1: " << time.elapsed();
     }
@@ -388,19 +401,26 @@ void InkLayerGLWidget::paintGL()
 
         time.restart();
 
-        m_vertex_vbo.bind();
-        m_vertex_vbo.write(0, &m_vertPoints[0], m_vertPoints.count() * sizeof(GLfloat));
-        m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
-        m_program->setAttributeBuffer(PROGRAM_VERTEX_ATTRIBUTE, GL_FLOAT, 0, 2);
+        //m_vertex_vbo.bind();
+        //m_vertex_vbo.write(0, &m_vertPoints[0], m_vertPoints.count() * sizeof(GLfloat));
+        //m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
+        //m_program->setAttributeBuffer(PROGRAM_VERTEX_ATTRIBUTE, GL_FLOAT, 0, 2);
 
-        m_color_vbo.bind();
-        m_color_vbo.write(0, &m_vertColors[0], m_vertColors.count() * sizeof(GLfloat));
-        m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
-        m_program->setAttributeBuffer(PROGRAM_COLOR_ATTRIBUTE, GL_FLOAT, 0, 3);
+        //m_color_vbo.bind();
+        //m_color_vbo.write(0, &m_vertColors[0], m_vertColors.count() * sizeof(GLfloat));
+        //m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
+        //m_program->setAttributeBuffer(PROGRAM_COLOR_ATTRIBUTE, GL_FLOAT, 0, 3);
+
+        m_mesh_vbo.bind();
+        m_mesh_vbo.write(0, &m_vertices[0], m_vertices.count() * sizeof(QVector3D));
+        m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
+        m_program->setAttributeBuffer(PROGRAM_VERTEX_ATTRIBUTE, GL_FLOAT, 0, 3);
+
+        glDrawElements(GL_LINES_ADJACENCY_EXT, m_indices.size() * sizeof(uint16_t), GL_UNSIGNED_SHORT, m_indices.data());
 
         m_textures->bind();
 
-        glMultiDrawArrays(GL_POLYGON, &plygons_starts[0], &eachPolygonCounts[0], plygonCount);
+        //glMultiDrawArrays(GL_POLYGON, &plygons_starts[0], &eachPolygonCounts[0], plygonCount);
 
         qInfo() << "Aden6: " << time.elapsed();
     }
@@ -1013,4 +1033,63 @@ void InkLayerGLWidget::plot_circle(int xm, int ym, int r)
         if (r > x) err += ++x * 5 + 1; /* e_xy+e_x > 0 */
         if (r <= y) err += ++y * 5 + 1; /* e_xy+e_y < 0 */
     } while (x < 0);
+}
+
+
+void InkLayerGLWidget::render()
+{
+    QVector<QVector2D> m_points;
+
+    // Draw current stroke
+    auto currentStroke = m_strokes->currentStroke();
+
+    int ptCount = currentStroke->pointCount();
+    if (ptCount < 2) return;
+
+    float pen_width;
+    float scale = 1.0f;
+
+    for (int i = 1; i < ptCount; i++)
+    {
+        pen_width = currentStroke->getPoint(i).second*scale;
+
+        auto ptStart = QVector2D(currentStroke->getPoint(i - 1).first.x()*scale, currentStroke->getPoint(i - 1).first.y()*scale);
+        auto ptEnd = QVector2D(currentStroke->getPoint(i).first.x()*scale, currentStroke->getPoint(i).first.y()*scale);
+
+        m_points << ptStart << ptEnd;
+    }
+
+    // brute-force method: recreate mesh if anything changed
+
+    // create a new vector that can contain 3D vertices
+
+    // to improve performance, make room for the vertices + 2 adjacency vertices
+    m_vertices.reserve(m_points.size() + 2);
+
+    // first, add an adjacency vertex at the beginning
+    m_vertices.push_back(2.0f * QVector3D(m_points[0], 0) - QVector3D(m_points[1], 0));
+
+    // next, add all 2D points as 3D vertices
+    QVector<QVector2D>::iterator itr;
+    for (itr = m_points.begin(); itr != m_points.end(); ++itr)
+        m_vertices.push_back(QVector3D(*itr, 0));
+
+    // next, add an adjacency vertex at the end
+    size_t n = m_points.size();
+    m_vertices.push_back(2.0f * QVector3D(m_points[n - 1], 0) - QVector3D(m_points[n - 2], 0));
+
+    // now that we have a list of vertices, create the index buffer
+    n = m_vertices.size() - 2;
+
+    m_indices.reserve(n * 4);
+
+    for (size_t i = 1; i < m_vertices.size() - 2; ++i)
+    {
+        m_indices.push_back(i - 1);
+        m_indices.push_back(i);
+        m_indices.push_back(i + 1);
+        m_indices.push_back(i + 2);
+    }
+
+    // finally, create the mesh
 }
