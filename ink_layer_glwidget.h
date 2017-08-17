@@ -217,7 +217,7 @@ private:
     QPoint m_endPos;
 
     QVector<GLfloat> m_vertPoints;
-    QVector<GLfloat> m_vertColors;
+
 
     QVector<int> m_polygonCounts;
 
@@ -225,5 +225,6 @@ private:
 
     QSharedPointer<QOpenGLTexture> m_textures;
     QVector<QVector3D> m_vertices;
+    QVector<QVector3D> m_vertColors;
     QVector<uint16_t> m_indices;
 };

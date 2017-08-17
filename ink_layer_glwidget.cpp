@@ -195,19 +195,17 @@ void InkLayerGLWidget::initializeGL()
     m_color_vbo.create();
     m_color_vbo.setUsagePattern(QOpenGLBuffer::DynamicCopy);
     m_color_vbo.bind();
-    m_vertColors.resize(VBO_SIZE * 3);
+    m_vertColors.resize(VBO_SIZE);
     for (int i = 0; i < VBO_SIZE; i++)
     {
-        m_vertColors[i * 3] = 1.0f;
-        m_vertColors[i * 3 + 1] = 1.0f;
-        m_vertColors[i * 3 + 2] = 0.0f;
+        m_vertColors[i] = { 1.0f, 1.0f,0.0f };
     }
-    m_color_vbo.allocate(m_vertColors.constData(), m_vertColors.count() * sizeof(GLfloat));
+    m_color_vbo.allocate(m_vertColors.constData(), m_vertColors.count() * sizeof(QVector3D));
 
     m_mesh_vbo.create();
     m_mesh_vbo.setUsagePattern(QOpenGLBuffer::DynamicCopy);
     m_mesh_vbo.bind();
-    m_vertices.resize(VBO_SIZE * 3);
+    m_vertices.resize(VBO_SIZE);
     m_mesh_vbo.allocate(m_vertices.constData(), m_vertices.count() * sizeof(QVector3D));
 
     glEnable(GL_DEPTH_TEST);
@@ -240,16 +238,15 @@ void InkLayerGLWidget::initializeGL()
     glEnable(GL_FRONT_FACE);
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex, this);
-    static const char *vsrc = vertexProgram().toStdString().c_str();
+    QString vsrc = vertexProgram();
     vshader->compileSourceCode(vsrc);
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment, this);
-    static const char *fsrc = fragProgram().toStdString().c_str();
+    QString fsrc = fragProgram();
     fshader->compileSourceCode(fsrc);
 
     QOpenGLShader *gshader = new QOpenGLShader(QOpenGLShader::Geometry, this);
-    static const char *gsrc = geomProgram().toStdString().c_str();
-
+    QString gsrc = geomProgram();
     gshader->compileSourceCode(gsrc);
 
     m_program->addShader(vshader);
@@ -259,8 +256,8 @@ void InkLayerGLWidget::initializeGL()
     m_program->bindAttributeLocation("ciPosition", PROGRAM_VERTEX_ATTRIBUTE);
     m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
 
-    //m_program->bindAttributeLocation("colAttr", PROGRAM_COLOR_ATTRIBUTE);
-    //m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
+    m_program->bindAttributeLocation("ciColor", PROGRAM_COLOR_ATTRIBUTE);
+    m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
 
     m_program->link();
 
@@ -273,12 +270,13 @@ void InkLayerGLWidget::initializeGL()
     m_win_scale = m_program->uniformLocation("WIN_SCALE");
     m_miter_limit = m_program->uniformLocation("MITER_LIMIT");
     m_thickness = m_program->uniformLocation("THICKNESS");
-    m_matrixUniform = m_program->uniformLocation("matrix");
+    m_matrixUniform = m_program->uniformLocation("ciModelViewProjection");
 
     m_program->bind();
 
     QMatrix4x4 m;
-    m.ortho(-0.5f, +0.5f, +0.5f, -0.5f, 4.0f, 15.0f);
+    //m.ortho(-0.5f, +0.5f, +0.5f, -0.5f, 4.0f, 15.0f);
+    m.ortho(0.0f, width(), height(), 0.0f, 4.0f, 15.0f);
     m.translate(0.0f, 0.0f, -10.0f);
 
     //OpenGl coordinates is inverse Y with the window coordinates.
@@ -344,33 +342,6 @@ void InkLayerGLWidget::paintGL()
 
     qInfo() << "Aden3: " << time.elapsed();
 
-    if (0)//vertPoints.empty())
-    {
-        //have to clockwise
-        GLfloat vertData[] =
-        {
-            -0.2f, -0.2f, 0.f,            
-            -0.2f, +0.2f, 0.f,            
-            +0.2f, +0.2f, 0.f,
-            +0.2f, -0.2f, 0.f,
-        };
-
-        GLfloat colors[] =
-        {
-            1.0f, 1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f,
-        };
-
-        for (int i = 0; i <12; i++)
-        {
-            m_vertPoints << vertData[i];
-            m_vertColors << colors[i];
-        }
-
-        pointCounts = 4;
-    }
 
     time.restart();
 
@@ -406,10 +377,10 @@ void InkLayerGLWidget::paintGL()
         //m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
         //m_program->setAttributeBuffer(PROGRAM_VERTEX_ATTRIBUTE, GL_FLOAT, 0, 2);
 
-        //m_color_vbo.bind();
-        //m_color_vbo.write(0, &m_vertColors[0], m_vertColors.count() * sizeof(GLfloat));
-        //m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
-        //m_program->setAttributeBuffer(PROGRAM_COLOR_ATTRIBUTE, GL_FLOAT, 0, 3);
+        m_color_vbo.bind();
+        m_color_vbo.write(0, &m_vertColors[0], m_vertColors.count() * sizeof(QVector3D));
+        m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
+        m_program->setAttributeBuffer(PROGRAM_COLOR_ATTRIBUTE, GL_FLOAT, 0, 3);
 
         m_mesh_vbo.bind();
         m_mesh_vbo.write(0, &m_vertices[0], m_vertices.count() * sizeof(QVector3D));
@@ -425,7 +396,9 @@ void InkLayerGLWidget::paintGL()
         qInfo() << "Aden6: " << time.elapsed();
     }
     else
-        glDrawArrays( GL_POLYGON, 0, pointCounts);
+    {
+        glDrawArrays(GL_POLYGON, 0, pointCounts);
+    }
 
 
 }
@@ -433,7 +406,8 @@ void InkLayerGLWidget::paintGL()
 void InkLayerGLWidget::resizeGL(int width, int height)
 {
     int side = qMin(width, height);
-    glViewport((width - side) / 2, (height - side) / 2, side, side);
+    //glViewport((width - side) / 2, (height - side) / 2, side, side);
+    glViewport(0,0, width, height);
 }
 
 //void InkLayerGLWidget::mousePressEvent(QMouseEvent *event)
@@ -1064,26 +1038,26 @@ void InkLayerGLWidget::render()
     // create a new vector that can contain 3D vertices
 
     // to improve performance, make room for the vertices + 2 adjacency vertices
-    m_vertices.reserve(m_points.size() + 2);
+    //m_vertices.reserve(m_points.size() + 2);
 
     // first, add an adjacency vertex at the beginning
-    m_vertices.push_back(2.0f * QVector3D(m_points[0], 0) - QVector3D(m_points[1], 0));
+    m_vertices[m_vertex_index++] = (2.0f * QVector3D(m_points[0], 0) - QVector3D(m_points[1], 0));
 
     // next, add all 2D points as 3D vertices
     QVector<QVector2D>::iterator itr;
     for (itr = m_points.begin(); itr != m_points.end(); ++itr)
-        m_vertices.push_back(QVector3D(*itr, 0));
+        m_vertices[m_vertex_index++] = (QVector3D(*itr, 0));
 
     // next, add an adjacency vertex at the end
     size_t n = m_points.size();
-    m_vertices.push_back(2.0f * QVector3D(m_points[n - 1], 0) - QVector3D(m_points[n - 2], 0));
+    m_vertices[m_vertex_index++] = (2.0f * QVector3D(m_points[n - 1], 0) - QVector3D(m_points[n - 2], 0));
 
     // now that we have a list of vertices, create the index buffer
-    n = m_vertices.size() - 2;
+    n = m_vertex_index - 2;
 
     m_indices.reserve(n * 4);
 
-    for (size_t i = 1; i < m_vertices.size() - 2; ++i)
+    for (size_t i = 1; i < n; ++i)
     {
         m_indices.push_back(i - 1);
         m_indices.push_back(i);
