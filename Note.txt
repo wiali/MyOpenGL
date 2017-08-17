@@ -3,3 +3,6 @@ https://forum.libcinder.org/topic/smooth-thick-lines-using-geometry-shader
 https://github.com/paulhoux/Cinder-Samples
 http://perfectionkills.com/exploring-canvas-drawing-techniques/
 http://perfectionkills.com/exploring-canvas-drawing-techniques/
+
+
+https://join.ucrtc.hp.com/meet/diogo.lima/BP7L4TDP
