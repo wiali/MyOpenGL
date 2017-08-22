@@ -169,7 +169,8 @@ InkLayerGLWidget::InkLayerGLWidget(QWidget* mockParent, QWidget *parent)
 InkLayerGLWidget::~InkLayerGLWidget()
 {
     makeCurrent();
-    //m_vbo.destroy();
+    m_color_vbo.destroy();
+    m_mesh_vbo.destroy();
     doneCurrent();
 }
 
@@ -183,14 +184,7 @@ void InkLayerGLWidget::initializeGL()
 {
     initializeOpenGLFunctions();
 
-    //makeObject();
     m_textures = QSharedPointer<QOpenGLTexture>::create(loadTexture());
-
-    m_vertex_vbo.create();
-    m_vertex_vbo.setUsagePattern(QOpenGLBuffer::DynamicCopy);
-    m_vertex_vbo.bind();
-    m_vertPoints.resize(VBO_SIZE * 2);
-    m_vertex_vbo.allocate(m_vertPoints.constData(), m_vertPoints.count() * sizeof(GLfloat));
 
     m_color_vbo.create();
     m_color_vbo.setUsagePattern(QOpenGLBuffer::DynamicCopy);
@@ -234,8 +228,8 @@ void InkLayerGLWidget::initializeGL()
     //so that means you need to either disable face-culling or change the winding of the front-face.
     //glFrontFace(GL_BACK);
     
-    glDisable(GL_CULL_FACE);
-    glEnable(GL_FRONT_FACE);
+    //glDisable(GL_CULL_FACE);
+    //glEnable(GL_FRONT_FACE);
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex, this);
     QString vsrc = vertexProgram();
@@ -259,14 +253,11 @@ void InkLayerGLWidget::initializeGL()
     m_program->bindAttributeLocation("ciColor", PROGRAM_COLOR_ATTRIBUTE);
     m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
 
+    m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
+    m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
+
     m_program->link();
 
-    /*  glEnableVertexAttribArray(PROGRAM_VERTEX_ATTRIBUTE);
-      glEnableVertexAttribArray(PROGRAM_TEXCOORD_ATTRIBUTE);*/
-    
-
-    //m_posAttr = m_program->attributeLocation("vertAttr");
-    //m_colAttr = m_program->attributeLocation("colAttr");
     m_win_scale = m_program->uniformLocation("WIN_SCALE");
     m_miter_limit = m_program->uniformLocation("MITER_LIMIT");
     m_thickness = m_program->uniformLocation("THICKNESS");
@@ -280,7 +271,9 @@ void InkLayerGLWidget::initializeGL()
     m.translate(0.0f, 0.0f, -10.0f);
 
     //OpenGl coordinates is inverse Y with the window coordinates.
-    m.scale(1.0f, -1.0f, -1.0f);
+    //m.scale(1.0f, -1.0f, -1.0f);
+
+    //glViewport(0, 0, width(), height());
 
     m_program->setUniformValue(m_matrixUniform, m);
     m_program->setUniformValue(m_win_scale, size());
@@ -298,109 +291,37 @@ void InkLayerGLWidget::paintGL()
 
     if (m_strokes)
     {
-        //m_all_lines.clear();
-        //m_polygonCounts.clear();
         // Draw current stroke
         auto currentStroke = m_strokes->currentStroke();
 
         if (currentStroke->pointCount() > 1)
         {
             m_vertex_index = 0;
-            m_polygonCounts.clear();
-
-            //draw(currentStroke);
             render();
         }
         qInfo() << "Aden1: " << time.elapsed();
     }
 
-    time.restart();
-    //QVector<GLfloat> vertPoints;
-    //for (auto line : m_all_lines)
-    //    vertPoints.append(line.second);
-
-    qInfo() << "Aden2: " << time.elapsed();
-
-    time.restart();
-
-    int floatCounts = m_vertex_index;
-    int pointCounts = m_vertex_index / 2;
-
-    //if (floatCounts > m_vertColors.size())
-    {
-        //QVector<GLfloat> vertColors(floatCounts - m_vertColors.size());
-        //int deltaCount = vertColors.size() / 3;
-        //for (int i = 0; i < pointCounts; i++)
-        //{
-        //    m_vertColors[i * 3] = 1.0f;
-        //    m_vertColors[i * 3 + 1] = 1.0f;
-        //    m_vertColors[i * 3 + 2] = 0.0f;
-        //}
-
-        //m_vertColors.append(vertColors);
-    }
-
-    qInfo() << "Aden3: " << time.elapsed();
-
-
-    time.restart();
-
-    //glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, &m_vertPoints[0]);
-
-    //glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, &m_vertColors[0]);
-
-    qInfo() << "Aden4: " << time.elapsed();
-
-    time.restart();
-
     if (m_vertex_index >0)
     {
-        int plygonCount = m_polygonCounts.size();
-        QVector<GLsizei> eachPolygonCounts;
-        QVector<GLint> plygons_starts;
-
-        plygons_starts << 0;
-        for (int i = 0; i < plygonCount; i++)
-        {
-            eachPolygonCounts << m_polygonCounts[i];
-            
-            if(i != 0 )
-                plygons_starts <<  i* m_polygonCounts[i];
-        }
-
-        qInfo() << "Aden5: " << time.elapsed();
-
         time.restart();
-
-        //m_vertex_vbo.bind();
-        //m_vertex_vbo.write(0, &m_vertPoints[0], m_vertPoints.count() * sizeof(GLfloat));
-        //m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
-        //m_program->setAttributeBuffer(PROGRAM_VERTEX_ATTRIBUTE, GL_FLOAT, 0, 2);
 
         m_color_vbo.bind();
         m_color_vbo.write(0, &m_vertColors[0], m_vertColors.count() * sizeof(QVector3D));
-        m_program->enableAttributeArray(PROGRAM_COLOR_ATTRIBUTE);
         m_program->setAttributeBuffer(PROGRAM_COLOR_ATTRIBUTE, GL_FLOAT, 0, 3);
 
         m_mesh_vbo.bind();
         m_mesh_vbo.write(0, &m_vertices[0], m_vertices.count() * sizeof(QVector3D));
-        m_program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
         m_program->setAttributeBuffer(PROGRAM_VERTEX_ATTRIBUTE, GL_FLOAT, 0, 3);
 
-        glDrawElements(GL_LINES_ADJACENCY_EXT, m_indices.size() * sizeof(uint16_t), GL_UNSIGNED_SHORT, m_indices.data());
+        glDrawElements(GL_LINES_ADJACENCY_EXT, m_indices.size() * sizeof(uint16_t), GL_UNSIGNED_SHORT, &m_indices[0]);
 
         m_textures->bind();
 
         //glMultiDrawArrays(GL_POLYGON, &plygons_starts[0], &eachPolygonCounts[0], plygonCount);
 
-        qInfo() << "Aden6: " << time.elapsed();
+        qInfo() << "Aden2: " << time.elapsed();
     }
-    else
-    {
-        glDrawArrays(GL_POLYGON, 0, pointCounts);
-    }
-
-
 }
 
 void InkLayerGLWidget::resizeGL(int width, int height)
@@ -409,53 +330,6 @@ void InkLayerGLWidget::resizeGL(int width, int height)
     //glViewport((width - side) / 2, (height - side) / 2, side, side);
     glViewport(0,0, width, height);
 }
-
-//void InkLayerGLWidget::mousePressEvent(QMouseEvent *event)
-//{
-//    lastPos = event->pos();
-//}
-
-//void InkLayerGLWidget::mouseMoveEvent(QMouseEvent *event)
-//{
-//    int dx = event->x() - lastPos.x();
-//    int dy = event->y() - lastPos.y();
-//
-//    if (event->buttons() & Qt::LeftButton) {
-//        rotateBy(8 * dy, 8 * dx, 0);
-//    }
-//    else if (event->buttons() & Qt::RightButton) {
-//        rotateBy(8 * dy, 0, 8 * dx);
-//    }
-//    lastPos = event->pos();
-//}
-
-//void InkLayerGLWidget::mouseReleaseEvent(QMouseEvent * /* event */)
-//{
-//    emit clicked();
-//}
-
-void InkLayerGLWidget::makeObject()
-{
-    //start from bottom left 
-    static const int coords_pos[4][3] =
-    {
-        { -1, -1, 0 },{ +1, -1, 0 },{ +1, +1, 0 },{ -1, +1, 0 }
-    };
-
-    QVector<GLfloat> vertData;
-    for (int i = 0; i < 4; ++i)
-    {
-        // vertex position
-        vertData.append(coords_pos[i][0]);
-        vertData.append(coords_pos[i][1]);
-        vertData.append(coords_pos[i][2]);
-    }
-
-    //m_vbo.create();
-    //m_vbo.bind();
-    //m_vbo.allocate(vertData.constData(), vertData.count() * sizeof(GLfloat));
-}
-
 
 void InkLayerGLWidget::setPenMode(bool penMode)
 {
@@ -490,7 +364,6 @@ void InkLayerGLWidget::eraseStroke(const QPoint& pos)
             if (QPoint(pos - inkPt.point).manhattanLength() < m_eraserSize)
             {
                 m_strokes->removeStroke(i);
-                updatePixmap(stroke->boundRect());
                 erased = true;
                 break;
             }
@@ -507,8 +380,6 @@ void InkLayerGLWidget::setInkData(QSharedPointer<InkData> strokes)
     m_strokes = strokes;
 
     emit inkDataChanged(strokes);
-
-    updatePixmap();
 }
 
 void InkLayerGLWidget::setColor(const QColor &c)
@@ -534,31 +405,6 @@ QColor InkLayerGLWidget::penPointColor() const
 QColor InkLayerGLWidget::color() const
 {
     return m_color;
-}
-
-void InkLayerGLWidget::updatePixmap(const QRect& clipRect)
-{
-    return;
-    if (m_strokes.isNull())
-    {
-        return;
-    }
-
-    QRect clipRegion(clipRect);
-    if (clipRect.isNull() || clipRect.isEmpty() || !clipRect.isValid())
-    {
-        clipRegion = QRect(0, 0, width(), height());
-    }
-
-    for (int i = 0; i < m_strokes->strokeCount(); i++)
-    {
-        auto stroke = m_strokes->stroke(i);
-        if (stroke->boundRect().intersects(clipRegion))
-        {
-            QPair<QColor, QVector<float>> lines;
-            draw(stroke);
-        }
-    }
 }
 
 QString InkLayerGLWidget::penInfoStr(const POINTER_PEN_INFO& penInfo)
@@ -690,7 +536,6 @@ void InkLayerGLWidget::addStroke()
     {
         auto r = m_strokes->currentStroke()->boundRect();
         m_strokes->addCurrentStroke();
-        updatePixmap(r);
         emit inkStrokeAdded();
     }
 }
@@ -770,140 +615,6 @@ void InkLayerGLWidget::showEvent(QShowEvent *event)
     return QOpenGLWidget::showEvent(event);
 }
 
-
-void InkLayerGLWidget::drawSmoothStroke(float pen_width, const QPointF& previous, const QPointF& point,
-    const QPointF& next, QVector<float>& tiangle_points) 
-{
-    QPointF c1 = (previous + point) / 2;
-    QPointF c2 = (next + point) / 2;
-    QPointF cc = (c1 + c2) / 2;
-    QPointF adjust = (point + cc) / 2;
-
-    // Not smooth enough! Do more process.
-    if ((adjust - cc).manhattanLength() >1 )    
-    {
-        getTriangles(pen_width, c1, (c1 + adjust) / 2, tiangle_points);
-        drawSmoothStroke(pen_width, c1, adjust, c2, tiangle_points);
-        getTriangles(pen_width, (c2 + adjust) / 2, c2, tiangle_points);
-    }
-    else
-    {
-        getTriangles(pen_width, c1, adjust, tiangle_points);
-        getTriangles(pen_width, adjust, c2, tiangle_points);
-    }
-}
-
-QVector2D InkLayerGLWidget::normalize(QVector2D& vec3)
-{
-    float mat_width = width();
-    float mat_height = height();
-
-    vec3.setX( (vec3.x() - mat_width / 2.0) / mat_width);
-    //vec3.setY((mat_height - (mat_height / 2.0 - vec3.y())) / mat_height);
-    vec3.setY( (mat_height / 2.0 - vec3.y()) / mat_height);
-
-    return vec3;
-}
-
-void InkLayerGLWidget::getTriangles(float width, const QPointF& start, const QPointF& end, QVector<float>& points)
-{
-    width /= 2.0;
-
-    auto start1 = start;
-    auto end1 = end;
-
-    //auto start1 = QPointF(100, 100);
-    //auto end1 = QPointF(200, 200);
-
-    //float angle = atan2(end.y() - start.y(), end.x() - start.x());
-    //float t2sina1 = width * sin(angle);
-    //float t2cosa1 = width * cos(angle);
-    //float t2sina2 = width * sin(angle);
-    //float t2cosa2 = width * cos(angle);
-
-    //points << start.x() + t2sina1 << start.y() - t2cosa1 << end.x() + t2sina2 << end.y() - t2cosa2 <<
-    //    end.x() - t2sina2 << end.y() + t2cosa2 << end.x() - t2sina2 << end.y() + t2cosa2 <<
-    //    start.x() - t2sina1 << start.y() + t2cosa1 << start.x() + t2sina1 << start.y() - t2cosa1;
-
-    //https://stackoverflow.com/questions/101718/drawing-a-variable-width-line-in-opengl-no-gllinewidth
-    // find line between p1 and p2
-
-    QVector2D p1(start1.x(), start1.y());
-    QVector2D p2(end1.x(), end1.y());
-
-    QVector2D lineP1P2 = p2 - p1;
-    //if we define dx = x2 - x1 and dy = y2 - y1, then the normals are(-dy, dx) and (dy, -dx).
-
-    QVector2D vNormal = QVector2D(lineP1P2.y(), -1.0*lineP1P2.x());
-    vNormal.normalize();
-
-    //ABCD conter clockwise
-    auto A = p1 + vNormal*(width);
-    auto B = p1 - vNormal*(width);
-
-    auto C = p2 - vNormal*(width);
-    auto D = p2 + vNormal*(width);
-
-    //if(A.y() < B.y())
-    //    A.setY(B.y());
-    //else
-    //    B.setY(A.y());
-
-    //if (C.y() < D.y())
-    //    C.setY(D.y());
-    //else
-    //    D.setY(C.y());   
-
-    normalize(A);
-    normalize(B);
-    normalize(C);
-    normalize(D);
-
-    points << A.x() << A.y() << B.x() << B.y() << C.x() << C.y() << D.x() << D.y();
-    //points << A.x() << A.y() << A.z() << D.x() << D.y() << D.z() << C.x() << C.y() << C.z() << B.x() << B.y() << B.z() ;
-
-}
-
-void InkLayerGLWidget::draw(QSharedPointer<InkStroke> stroke, bool mono, double scale )
-{
-    int ptCount = stroke->pointCount();
-    if (ptCount < 2) return;
-
-    //QPair<QColor, QVector<float>> lines; //float[6] = start_x, start_y, end_x, end_y
-
-    QColor color(Qt::black);
-    if (!mono)
-    {
-        color = stroke->color();
-    }
-
-    //lines.first = color;
-
-    float pen_width;
-
-    for (int i = 1; i < ptCount; i++)
-    {
-        pen_width = stroke->getPoint(i).second*scale;
-
-        auto ptStart = QPointF(stroke->getPoint(i - 1).first.x()*scale, stroke->getPoint(i - 1).first.y()*scale);
-        auto ptEnd = QPointF(stroke->getPoint(i).first.x()*scale, stroke->getPoint(i).first.y()*scale);
-
-        //QPointF vector = ptEnd - ptStart;
-        //if (vector.manhattanLength() > pen_width/2.0)
-        {
-            QVector<QPointF> smoothPts = plot_line(ptStart, ptEnd, pen_width / 2.0);//interpolation
-
-            for (auto smooth_point : smoothPts)
-            {
-                int previousSize = m_vertex_index;
-                draw_circle(smooth_point.x(), smooth_point.y(), pen_width / 2.0);
-                m_polygonCounts << (m_vertex_index - previousSize) / 2;
-            }
-        }
-    }
-}
-
-
 void InkLayerGLWidget::mousePressEvent(QMouseEvent *event)
 {
     m_strokes->clear();
@@ -937,78 +648,6 @@ void InkLayerGLWidget::mouseMoveEvent(QMouseEvent *event)
 
     emit penMove(penInfo);
 }
-
-void draw_solid_circle(float x, float y, float radius)
-{
-    int count;
-    int sections = 200;
-
-    GLfloat TWOPI = 2.0f * 3.14159f;
-
-    glBegin(GL_TRIANGLE_FAN);
-    glVertex2f(x, y);
-
-    for (count = 0; count <= sections; count++)
-    {
-        glVertex2f(x + radius*cos(count*TWOPI / sections), y + radius*sin(count*TWOPI / sections));
-    }
-    glEnd();
-}
-
-void InkLayerGLWidget::draw_circle(float x, float y, float radius)
-{
-    plot_circle(x, y, radius);
-    return;
-
-    static const float angle = 2.0f * 3.1416f / (CIRCLE_POINTS_NUM-1);
-
-    double angle1=0.0;
-    QVector2D point(x+radius * cos(0.0), y+radius * sin(0.0));
-    normalize(point);
-    QVector<float> polygon;
-    polygon << point.x() << point.y();
-    for (int i=0; i<CIRCLE_POINTS_NUM-1; i++)
-    {
-        point = QVector2D(x+radius * cos(angle1), y+radius *sin(angle1));
-        normalize(point);
-        polygon << point.x() << point.y();
-        angle1 += angle;
-    }
-}
-
-
-
-void InkLayerGLWidget::plot_circle(int xm, int ym, int r)
-{
-    int x = -r, y = 0, err = 2 - 2 * r; /* II. Quadrant */
-    do {
-        QVector2D vert;
-        vert = QVector2D(xm - x, ym + y);
-        normalize(vert);        
-        m_vertPoints[m_vertex_index++] = vert.x();
-        m_vertPoints[m_vertex_index++] = vert.y(); /*   I. Quadrant */
-
-        vert = QVector2D(xm - y, ym - x);
-        normalize(vert);
-        m_vertPoints[m_vertex_index++] = vert.x();
-        m_vertPoints[m_vertex_index++] = vert.y(); /*  II. Quadrant */
-
-        vert = QVector2D(xm + x, ym - y);
-        normalize(vert);
-        m_vertPoints[m_vertex_index++] = vert.x();
-        m_vertPoints[m_vertex_index++] = vert.y(); /*  III. Quadrant */
-
-        vert = QVector2D(xm + y, ym + x);
-        normalize(vert);
-        m_vertPoints[m_vertex_index++] = vert.x();
-        m_vertPoints[m_vertex_index++] = vert.y(); /*  IV. Quadrant */
-
-        r = err;
-        if (r > x) err += ++x * 5 + 1; /* e_xy+e_x > 0 */
-        if (r <= y) err += ++y * 5 + 1; /* e_xy+e_y < 0 */
-    } while (x < 0);
-}
-
 
 void InkLayerGLWidget::render()
 {
@@ -1055,6 +694,7 @@ void InkLayerGLWidget::render()
     // now that we have a list of vertices, create the index buffer
     n = m_vertex_index - 2;
 
+    m_indices.clear();
     m_indices.reserve(n * 4);
 
     for (size_t i = 1; i < n; ++i)
