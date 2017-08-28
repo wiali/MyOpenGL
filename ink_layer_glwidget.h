@@ -81,8 +81,6 @@ public slots:
     */
     void onPenMove(const POINTER_PEN_INFO& penInfo);
 
-    void updatePixmap(const QRect& clipRect = QRect());
-
     void mousePressEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
     void mouseReleaseEvent(QMouseEvent *event);
@@ -130,7 +128,6 @@ protected:
     void showEvent(QShowEvent *event) override;
 
 private:
-    void makeObject();
 
     void changeCursor(int penSize);
     QString penInfoStr(const POINTER_PEN_INFO& penInfo);
@@ -147,40 +144,9 @@ private:
     // Add current stroke to the list
     void addStroke();
 
-    void draw(QSharedPointer<InkStroke> stroke, bool mono = false, double scale = 1.0);
-
-    void drawSmoothStroke(float pen_width, const QPointF& previous, const QPointF& point,
-        const QPointF& next, QVector<float>& tiangle_points);
-
-    void getTriangles(float width, const QPointF& start, const QPointF& end, QVector<float>& points);
-
-    QVector2D normalize(QVector2D& vec3);
-
-    void draw_circle(float x, float y, float radius);
-    void plot_circle(int xm, int ym, int r);
-
     void render();
 
 private:
-    GLuint m_posAttr;
-    GLuint m_colAttr;
-    GLuint m_matrixUniform;
-
-    GLuint	m_win_scale;		// the size of the viewport in pixels
-    GLuint	m_miter_limit;	// 1.0: always miter, -1.0: never miter, 0.75: default
-    GLuint	m_thickness;		// the thickness of the line in pixels
-
-    QColor m_clearColor;
-    QSharedPointer<QOpenGLShaderProgram> m_program;
-
-    QOpenGLBuffer m_vertex_vbo;
-    QOpenGLBuffer m_color_vbo;
-    QOpenGLBuffer m_mesh_vbo;
-
-    //GLuint m_vertex_vbo;
-    //GLuint m_color_vbo;
-
-
     QWidget* m_mockParent;
 
     QColor m_color;
@@ -213,13 +179,17 @@ private:
     // Ink data
     QSharedPointer<InkData> m_strokes;
 
-    QPoint m_startPos;
-    QPoint m_endPos;
+    GLuint m_matrixUniform;
 
-    QVector<GLfloat> m_vertPoints;
+    GLuint	m_win_scale;		// the size of the viewport in pixels
+    GLuint	m_miter_limit;	// 1.0: always miter, -1.0: never miter, 0.75: default
+    GLuint	m_thickness;		// the thickness of the line in pixels
 
+    QColor m_clearColor;
+    QSharedPointer<QOpenGLShaderProgram> m_program;
 
-    QVector<int> m_polygonCounts;
+    QOpenGLBuffer m_color_vbo;
+    QOpenGLBuffer m_mesh_vbo;
 
     int m_vertex_index;
 
