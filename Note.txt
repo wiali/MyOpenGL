@@ -6,3 +6,18 @@ http://perfectionkills.com/exploring-canvas-drawing-techniques/
 
 
 https://join.ucrtc.hp.com/meet/diogo.lima/BP7L4TDP
+
+
+http://blog.csdn.net/JasonDing1354/article/details/41212425
+
+http://ffmpeg.zeranoe.com/builds/
+
+http://lib.csdn.net/article/opencv/26774
+
+https://github.com/wang-bin/QtAV
+
+https://github.com/search?l=&p=2&q=ffmpeg+language%3AC%2B%2B&ref=advsearch&type=Repositories&utf8=%E2%9C%93
+
+https://github.com/brookicv/FFMPEG-study
+
+https://github.com/jiemojiemo/ffmpeg
