@@ -21,3 +21,23 @@ https://github.com/search?l=&p=2&q=ffmpeg+language%3AC%2B%2B&ref=advsearch&type=
 https://github.com/brookicv/FFMPEG-study
 
 https://github.com/jiemojiemo/ffmpeg
+
+https://searchcode.com/file/130614644/gazebo/common/VideoEncoder.cc
+
+https://libav.org/documentation/doxygen/master/examples.html
+
+https://github.com/avTranscoder/avTranscoder/blob/develop/src/AvTranscoder/stream/OutputStream.cpp
+
+https://searchcode.com/file/131894238/client/AnyVODClient/src/audio/SPDIFEncoder.cpp
+
+https://searchcode.com/file/131894173/client/AnyVODClient/src/media/VideoThread.cpp
+
+https://free-astro.org/svn/siril/trunk/src/io/mp4_output.c
+
+https://github.com/fe-dagostino/libavcpp/blob/master/examples/decoder.cpp
+
+https://github.com/Vouk/voukoder/blob/master/Voukoder/ExporterX264.cpp
+
+https://github.com/cppwrappers/LibAvCpp/tree/master/libavcpp
+
+https://github.com/gdkar/tinyav/tree/master/tinyav
