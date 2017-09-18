@@ -3,163 +3,175 @@
 #include "video_widget.h"
 #include "common/utilities.h"
 
+static const GLfloat Vertex[4][2][2] =
+{
+    { { -1.0f, -1.0f },{ 0.0f, 0.0f } },
+    { { 1.0f, -1.0f },{ 1.0f, 0.0f } },
+    { { 1.0f, 1.0f },{ 1.0f, 1.0f } },
+    { { -1.0f, 1.0f },{ 0.0f, 1.0f } },
+};
 
 class RenderingThread : public QThread
 {
 public:
     RenderingThread(VideoWidget* widget)
-        :surface(new QOffscreenSurface), m_widget(widget)
-
+        : m_surface(new QOffscreenSurface)
+        , m_widget(widget)
+        , m_framebufferSize(widget->width(), widget->height())
     {
-        context = QSharedPointer<QOpenGLContext>::create();
-        context->setShareContext(m_widget->context());
-        context->setFormat(m_widget->context()->format());
-        context->create();
-        context->moveToThread(this);
+        m_context = QSharedPointer<QOpenGLContext>::create();
+        m_context->setShareContext(m_widget->context());
+        m_context->setFormat(m_widget->context()->format());
+        m_context->create();
+        m_context->moveToThread(this);
 
-        surface->setFormat(context->format());
-        surface->create();
-        surface->moveToThread(this);
+        m_surface->setFormat(m_context->format());
+        m_surface->create();
+        m_surface->moveToThread(this);
+
+        connect(widget, &VideoWidget::geometryChanged, this, &RenderingThread::updateFrameBuffer);
     }
     
     void initialize()
     {
-        QOpenGLFramebufferObjectFormat framebufferFormat;
-        framebufferFormat.setAttachment(
-            QOpenGLFramebufferObject::CombinedDepthStencil);
-
-        framebufferSize = QSize(4200, 2800);
-        renderFbo = QSharedPointer<QOpenGLFramebufferObject>::create(
-            framebufferSize,
-            framebufferFormat);
-
-        displayFbo = QSharedPointer<QOpenGLFramebufferObject>::create(
-            framebufferSize,
-            framebufferFormat);
-
-        initialized = true;
+        m_initialized = true;
     }
 
     void stop()
     {
-        mutex.lock();
-        exiting = true;
-        mutex.unlock();
+        m_mutex.lock();
+        m_exiting = true;
+        m_mutex.unlock();
     }
 
     void lock()
     {
-        mutex.lock();
+        m_mutex.lock();
     }
 
     void unlock()
     {
-        mutex.unlock();
+        m_mutex.unlock();
     }
 
     void renderFrame()
     {
-        // Bind the framebuffer for rendering.
-        //renderFbo->bind();
-
-        auto f = QOpenGLContext::currentContext()->functions();
-
-        f->glClearColor(0, 0, 0, 1);
-        f->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         auto compositor = m_widget->getCompositor();
         auto renderMapping = m_widget->getRenderMapping();
-        if (compositor)
+        if (compositor && !renderMapping.empty())
         {
-            compositor->blitFramebuffer(renderFbo.data(), renderMapping);
+            if (!m_renderFbo || m_destination != renderMapping.begin()->destination)
+            {
+                updateFrameBuffer();
+                m_destination = renderMapping.begin()->destination;
+            }
+            compositor->blitFramebuffer(m_renderFbo.data(), renderMapping);
+            m_textureId = m_renderFbo->texture();
         }
-
-        // Flush the pipeline
-        //glFlush();
-
-        //// Release the framebuffer
-        //renderFbo->release();
-        //// Take the current framebuffer texture ID
-        tex = renderFbo->texture();
-
-        //// Swap the framebuffers for double-buffering.
-        //std::swap(renderFbo, displayFbo);
     }
 
     GLuint framebufferTexture()
     {
-        return tex;
+        return m_textureId;
+    }
+
+    void update()
+    {
+        m_waitForFrameReady.wakeAll();
     }
 
 protected:
     void run()
     {
-        for (;;)
+        while (1)
         {
-            // Lock the rendering mutex.
-            QMutexLocker lock(&mutex);
-
             // Stops the thread if exit flag is set.
-            if (exiting)
+            if (m_exiting)
                 break;
 
-            // Make the OpenGL context current on offscreen surface.
-            context->makeCurrent(surface.data());
-
-            // Initialize if not done.
-            if (!initialized) // just think initialized by widget
+            //wait the frame ready signal to update frame buffer.
             {
-                //initialize(d);
-                initialized = true;
+                QMutex frameReadymutex;
+                QMutexLocker frameReadyLocker(&frameReadymutex);
+                m_waitForFrameReady.wait(&frameReadymutex);
             }
 
-            // Renders the frame
+            // Lock the rendering mutex.
+            QMutexLocker lock(&m_mutex);
+
+            // Make the OpenGL context current on offscreen surface.
+            m_context->makeCurrent(m_surface.data());
+
+            // Initialize if not done.
+            if (!m_initialized)
+            {
+                m_initialized = true;
+            }
+
+            // Render the frame
             renderFrame();
 
             // Release OpenGL context
-            context->doneCurrent();
-
-            //context->moveToThread(application);
+            m_context->doneCurrent();
 
             // Notify UI about new frame.
             QMetaObject::invokeMethod(m_widget, "update");
         }
     }
 
+private slots:
+    void updateFrameBuffer()
+    {
+        QOpenGLFramebufferObjectFormat framebufferFormat;
+        framebufferFormat.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
+
+        m_framebufferSize = QSize(m_widget->width(), m_widget->height());
+        m_renderFbo = QSharedPointer<QOpenGLFramebufferObject>::create(
+            m_framebufferSize, framebufferFormat);
+    }
+
 private:
     // OpenGL context
-    QSharedPointer<QOpenGLContext> context;
+    QSharedPointer<QOpenGLContext> m_context;
     // Offscreen surface
-    QSharedPointer<QOffscreenSurface> surface;
+    QSharedPointer<QOffscreenSurface> m_surface;
     // OpengL widget
     VideoWidget* m_widget;
-    // Size of framebuffers
-    QSize framebufferSize;
+    // Size of frame buffer
+    QSize m_framebufferSize;
 
     // Rendering mutex
-    QMutex mutex;
+    QMutex m_mutex;
     // True if the application is exiting
-    bool exiting = false;
+    bool m_exiting = false;
     // True if the OpenGL is initialized
-    bool initialized = false;
+    bool m_initialized = false;
 
     // Framebuffer texture ID for the UI thread.
-    GLuint tex = 0;
+    GLuint m_textureId = 0;
 
-    // Framebuffer for thread to render the rotating quad.
-    QSharedPointer<QOpenGLFramebufferObject> renderFbo;
-    // Framebuffer for UI to display
-    QSharedPointer<QOpenGLFramebufferObject> displayFbo;
+    // Framebuffer for thread to render the live stream.
+    QSharedPointer<QOpenGLFramebufferObject> m_renderFbo;
 
+    QRect m_destination;
+
+    QWaitCondition m_waitForFrameReady;
 };
 
 
+struct VideoWidget::VideoStreamZoomAndPan {
+public:
+    VideoStreamZoomAndPan() : zoom(1) {}
+
+    qreal zoom;
+    QPointF pan;
+};
+
 VideoWidget::VideoWidget(QWidget* parent)
     : QOpenGLWidget(parent)
-    , m_viewportManipulationEnabled(true)
     , m_lastScaleFactor(0)
     , m_startZoomFactor(1)
-{
+    , m_viewportManipulationEnabled(true) {
     setAutoFillBackground(false);
     setAttribute(Qt::WA_NoSystemBackground, true);
 
@@ -175,166 +187,174 @@ VideoWidget::VideoWidget(QWidget* parent)
     m_mouseWheelZoomSensitivity = settings->value("mouse_wheel_zoom_sensitivity", 1500).toFloat();
     m_touchSensitivity = settings->value("touch_sensitivity", 250).toReal();
     m_touchTreshold = settings->value("touch_treshold", 5).toReal();
-    m_zoomRange = QPointF(settings->value("zoom_range_min", 1).toReal(), settings->value("zoom_range_max", 10).toReal());    
+    m_zoomRange = QPointF(settings->value("zoom_range_min", 1).toReal(), settings->value("zoom_range_max", 10).toReal());
 }
 
-void VideoWidget::resizeGL(int width, int height)
-{
-    auto f = QOpenGLContext::currentContext()->functions();
-
-    int side = qMin(width, height);
-    f->glViewport((width - side) / 2, (height - side) / 2, side, side);
-
+void VideoWidget::resizeGL(int width, int height) {
     QOpenGLWidget::resizeGL(width, height);
-
-    updateVideoRect();
+    updateZoomAndPan();
+    emit geometryChanged();
 }
 
-void VideoWidget::initializeGL()
-{
-    //startThread();
+void VideoWidget::updateZoomAndPan() {
+    if (auto firstStream = m_model->fullscreenVideoStreamModel()) {
+        if (m_compositor && m_compositor->frameSize().isValid()) {
+            const auto zoomAndPan = m_videoStreamZoomAndPan[firstStream];
+            updateZoomAndPan(zoomAndPan.zoom, zoomAndPan.pan);
+        }
+    }
 }
 
-void VideoWidget::paintGL()
-{
-    //if (!m_renderingThread)
-    //    return;
+void VideoWidget::paintGL() {
 
-    //m_renderingThread->lock();
-    
-    if (m_model)
-    {
+    if (!m_renderingThread)
+        return;
+
+    if (m_model) {
         if (m_renderMapping.count() != m_model->selectedVideoStreamSources().count()) {
-            updateVideoRect();
+            updateZoomAndPan();
         }
 
-        //const GLuint textureId =
-        //    m_renderingThread->framebufferTexture();
+        if (m_renderMapping.empty())
+            return;
 
-        //makeCurrent();
-
-        ////glActiveTexture(GL_TEXTURE0);
-        //glBindTexture(GL_TEXTURE_2D, textureId);
-
-        //doneCurrent();
+        m_renderingThread->lock();
 
         auto f = QOpenGLContext::currentContext()->functions();
 
-        f->glClearColor(0, 0, 0, 1);
+        f->glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         f->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (m_compositor)
-        {
-            m_compositor->blitFramebuffer(nullptr, m_renderMapping);
-        }
+        GLuint textureId = m_renderingThread->framebufferTexture();
 
-        //if (Utilities::g_inkToolBox)
+        f->glBindTexture(GL_TEXTURE_2D, textureId);
+        glBegin(GL_QUADS);
+        for (int i = 0; i < 4; ++i)
         {
-            //GlobalUtilities::delay(0);
-            //Utilities::g_inkToolBox->repaint();
-            //QMetaObject::invokeMethod(Utilities::g_inkToolBox.data(), "repaint");
+            glTexCoord2f(Vertex[i][1][0], Vertex[i][1][1]);
+            glVertex2f(Vertex[i][0][0], Vertex[i][0][1]);
         }
+        glEnd();
 
-        //if (m_compositor)
-        //{
-        //    makeCurrent();
-        //    m_compositor->showFramebuffer(nullptr, m_renderMapping);
-        //    doneCurrent();
-        //}
+        m_renderingThread->unlock();
     }
-
-    //m_renderingThread->unlock();
-
-    //QOpenGLWidget::paintGL();
 }
 
-
-bool VideoWidget::viewportManipulationEnabled() const
+void VideoWidget::onCompositorUpdated()
 {
-    return m_viewportManipulationEnabled;
-}
-
-void VideoWidget::setViewportManipulationEnabled(bool viewportManipulationEnabled)
-{
-    if (m_viewportManipulationEnabled != viewportManipulationEnabled)
+    if (m_renderingThread)
     {
-        m_viewportManipulationEnabled = viewportManipulationEnabled;
-
-        emit viewportManipulationEnabledChanged(m_viewportManipulationEnabled);
+        m_renderingThread->update();
     }
 }
 
-void VideoWidget::onCompositorUpdated() { update(); }
-
-void VideoWidget::setModel(QSharedPointer<LiveCaptureModel> model, QSharedPointer<LiveVideoStreamCompositor> compositor)
-{
+void VideoWidget::setModel(QSharedPointer<LiveCaptureModel> model,
+                           QSharedPointer<LiveVideoStreamCompositor> compositor,
+                           bool viewportManipulationEnabled){
     m_model = model;
     m_compositor = compositor;
+    m_viewportManipulationEnabled = viewportManipulationEnabled;
 
-    for (auto videoStreamSource : m_model->videoStreamSources())
-    {
-        connect(videoStreamSource.data(), &VideoStreamSourceModel::viewportChanged, this, &VideoWidget::onViewportChanged);
-    }
+    updateTransform();
 
     connect(model.data(), &LiveCaptureModel::videoStreamStateChanged, this, &VideoWidget::onVideoStreamStateChanged);
     connect(m_compositor.data(), &LiveVideoStreamCompositor::updated, this, &VideoWidget::onCompositorUpdated);
 
+    if (!m_viewportManipulationEnabled) {
+        connect(model.data(), &LiveCaptureModel::viewportChanged, this, &VideoWidget::updateTransform);
+    }
+
     onVideoStreamStateChanged();
 }
 
-void VideoWidget::onVideoStreamStateChanged()
-{
-    foreach(auto connection, m_connections)
-    {
+void VideoWidget::onVideoStreamStateChanged() {
+    foreach(auto connection, m_connections) {
         disconnect(connection);
     }
-    m_connections.clear();    
+    m_connections.clear();
 
-    onViewportChanged();
+    updateZoomAndPan();
 }
 
-void VideoWidget::updateVideoRect()
-{
-    if (m_compositor)
-    {
-        m_renderMapping = m_compositor->videoStreamMappings(size());
+void VideoWidget::updateTransform() {
+    if (m_compositor) {
+        if (auto firstStream = m_model->fullscreenVideoStreamModel()) {
+            const auto frameSize = m_compositor->frameSize();
+
+            if (m_viewportManipulationEnabled && frameSize.isValid()) {
+                const auto zoomAndPan = m_videoStreamZoomAndPan[firstStream];
+                m_transform = calculateTransform(zoomAndPan.pan, zoomAndPan.zoom);
+                const auto inverse = m_transform.inverted();
+                auto absoluteViewport = inverse.mapRect(rect());
+
+                // Invert Y-axis
+                absoluteViewport = QRect(absoluteViewport.x(),
+                                         frameSize.height() - absoluteViewport.bottom(),
+                                         absoluteViewport.width(), absoluteViewport.height());
+
+                QRectF viewport(static_cast<qreal>(absoluteViewport.x()) / static_cast<qreal>(frameSize.width()),
+                                static_cast<qreal>(absoluteViewport.y()) / static_cast<qreal>(frameSize.height()),
+                                static_cast<qreal>(absoluteViewport.width()) / static_cast<qreal>(frameSize.width()),
+                                static_cast<qreal>(absoluteViewport.height()) / static_cast<qreal>(frameSize.height()));
+
+                m_model->setViewport(viewport);
+
+                m_renderMapping = m_compositor->videoStreamMappings(rect(), m_transform);
+            } else {
+                // Update viewport to make sure it includes only video frame
+                auto viewport = m_model->viewport();
+                m_transform = Utilities::transformFromViewport(&viewport, frameSize, rect());
+
+                QRectF videoFrameRectangle(viewport.left() * frameSize.width(),
+                                           viewport.top() * frameSize.height(),
+                                           viewport.width() * frameSize.width(),
+                                           viewport.height() * frameSize.height());
+
+                QRect transformRectangle(QPoint(), videoFrameRectangle.size().toSize());
+
+                m_renderMapping = m_compositor->videoStreamMappings(rect(),
+                                                                    videoFrameRectangle.toRect(),
+                                                                    transformRectangle,
+                                                                    m_transform, true);
+            }
+
+            update();
+        }
     }
 }
 
-void VideoWidget::onViewportChanged()
-{
-    updateVideoRect();
-    update();
+QTransform VideoWidget::calculateTransform(const QPointF& pan, qreal zoom) {
+    QTransform transform;
+
+    if (m_compositor) {
+        const auto frameSize = m_compositor->frameSize();
+        auto scaledSize = frameSize.scaled(size(), Qt::KeepAspectRatio);
+
+        // Pan the image
+        transform.translate(pan.x(), pan.y());
+
+        // Scale to widget size (but maintain aspect ratio)
+        transform.scale(static_cast<qreal>(scaledSize.width()) / static_cast<qreal>(frameSize.width()) * zoom,
+                        static_cast<qreal>(scaledSize.height()) / static_cast<qreal>(frameSize.height()) * zoom);
+    }
+
+    return transform;
 }
 
-QPointF VideoWidget::normalizeToVideoRect(QPoint widgetPos)
-{
-    const auto firstStream = m_model->selectedVideoStreamSources().first();
-    const auto videoRect = m_renderMapping[firstStream].destination;
-    const QPointF videoPosition(widgetPos.x() - videoRect.x(), videoRect.height() - (widgetPos.y() - videoRect.y()));
-
-    return QPointF(videoPosition.x() / videoRect.width(), videoPosition.y() / videoRect.height());
-}
-
-void VideoWidget::wheelEvent(QWheelEvent* event)
-{
-    if (m_viewportManipulationEnabled)
-    {
+void VideoWidget::wheelEvent(QWheelEvent* event) {
+    if (m_viewportManipulationEnabled) {
         if(m_model->videoStreamState() == LiveCaptureModel::VideoStreamState::Running &&
-                m_model->captureState() == LiveCaptureModel::CaptureState::NotCapturing)
-        {
-            const auto relativePosition = normalizeToVideoRect(event->pos());
+                m_model->captureState() == LiveCaptureModel::CaptureState::NotCapturing) {
+            const auto relativePosition = event->pos();
 
             QPointF angleDelta(static_cast<qreal>(event->angleDelta().x() / m_mouseWheelZoomSensitivity),
                                static_cast<qreal>(event->angleDelta().y() / m_mouseWheelZoomSensitivity));
             auto delta = angleDelta.x() + angleDelta.y();
 
-            if (zoomTo(relativePosition, delta))
-            {
+            if (zoomTo(relativePosition, delta)) {
                 event->accept();
             }
-            else
-            {
+            else {
                 qInfo() << this << "Failed to zoom" << relativePosition << delta;
             }
         }
@@ -343,29 +363,35 @@ void VideoWidget::wheelEvent(QWheelEvent* event)
     QWidget::wheelEvent(event);
 }
 
-bool VideoWidget::zoomTo(QPointF relativePosition, qreal delta)
-{
+bool VideoWidget::zoomTo(QPointF relativePosition, qreal delta) {
     bool result = false;
 
-    if (auto camera = m_model->fullscreenVideoStreamModel())
-    {
-        auto viewport = camera->viewport();
-        auto newWidth = 1.0 / (1.0 / viewport.width() + delta);
-        const auto maxWidth = 1.0 / m_zoomRange.x();
-        const auto minWidth = 1.0 / m_zoomRange.y();
+    if (auto firstStream = m_model->fullscreenVideoStreamModel()) {
+        const auto zoomAndPan = m_videoStreamZoomAndPan[firstStream];
+        auto newZoom = zoomAndPan.zoom + delta;
 
         // Limit the zoom by configured boundaries
-        newWidth = qBound(minWidth, newWidth, maxWidth);
-        auto updatedDelta = viewport.width() - newWidth;
+        newZoom = qBound(m_zoomRange.x(), newZoom, m_zoomRange.y());
+        const auto updatedDelta = zoomAndPan.zoom - newZoom;
 
         // Stop moving viewport if we are near maximum/minimum zoom level
-        if (abs(viewport.width() - newWidth) > 0.0001)
-        {
-            // Since we want to retain position under cursor after zoom we need to calculate new viewport and shift
-            auto left = viewport.left() + relativePosition.x() * updatedDelta;
-            auto top = viewport.top() + relativePosition.y() * updatedDelta;
+        if (qAbs(updatedDelta) > std::numeric_limits<qreal>::epsilon()) {
+            // Invert screen y-coordinate because OpenGL is in inverted Y
+            relativePosition.setY(height() - relativePosition.y());
 
-            tryUpdateViewport(QRectF(left, top, newWidth, newWidth));
+            // Calculate where in target image current cursor position points to
+            auto absolutePosition = m_transform.inverted().map(relativePosition);
+
+            // Calculate new transformation
+            auto newTransform = calculateTransform(zoomAndPan.pan, newZoom);
+
+            // And now calculate image position back to viewer coordinate system with updated transformation
+            auto newRelativePosition = newTransform.map(absolutePosition);
+
+            // Since we want to maintain same position under the cursor we calculate the difference and shift
+            auto shift = relativePosition - newRelativePosition;
+
+            updateZoomAndPan(newZoom, zoomAndPan.pan + shift);
 
             result = true;
         }
@@ -374,129 +400,117 @@ bool VideoWidget::zoomTo(QPointF relativePosition, qreal delta)
     return result;
 }
 
-void VideoWidget::moveCenter(QPointF offset)
-{
-    if (auto camera = m_model->fullscreenVideoStreamModel())
-    {
-        auto viewport = camera->viewport();
-        QPointF zoomedOffset(offset.x() * viewport.width(), 2.0*(offset.y() * viewport.height()));
-        viewport.moveCenter(viewport.center() - zoomedOffset);
+void VideoWidget::updateZoomAndPan(qreal zoom, QPointF pan) {
+    if (auto firstStream = m_model->fullscreenVideoStreamModel()) {
+        const auto frameSize = m_compositor->frameSize();
 
-        tryUpdateViewport(viewport);
+        if (frameSize.isValid()) {
+            const auto unpannedViewport = calculateTransform(QPointF(), zoom).inverted().mapRect(rect());
+            const auto scaledSize = frameSize.scaled(size(), Qt::KeepAspectRatio) * zoom;
+            const auto newTransform = calculateTransform(pan, zoom);
+            auto absoluteViewport = newTransform.inverted().mapRect(rect());
+            auto newCenter = rect().center();
+
+            // If the viewport is bigger than image just center it in the viewer
+            if (unpannedViewport.width() > frameSize.width()) {
+                pan.setX(width() - scaledSize.width());
+                pan.rx() /= 2.0;
+            } else {
+                if (absoluteViewport.left() < 0) absoluteViewport.moveLeft(0);
+
+                if (absoluteViewport.right() > frameSize.width()) {
+                    absoluteViewport.moveRight(frameSize.width() - 1);
+                }
+
+                // Calculate back to window coordinate system
+                newCenter.setX(newTransform.mapRect(absoluteViewport).center().x());
+            }
+
+            if (unpannedViewport.height() > frameSize.height()) {
+                pan.setY(height() - scaledSize.height());
+                pan.ry() /= 2.0;
+            } else {
+                if (absoluteViewport.top() < 0) absoluteViewport.moveTop(0);
+
+                if (absoluteViewport.bottom() > frameSize.height()) {
+                    absoluteViewport.moveBottom(frameSize.height() - 1);
+                }                
+
+                // Calculate back to window coordinate system
+                newCenter.setY(newTransform.mapRect(absoluteViewport).center().y());
+            }
+
+            pan += rect().center() - newCenter;
+
+            m_videoStreamZoomAndPan[firstStream].zoom = zoom;
+            m_videoStreamZoomAndPan[firstStream].pan = pan;
+            updateTransform();
+        }
     }
 }
 
-void VideoWidget::tryUpdateViewport(QRectF updatedViewport)
-{
-    if (auto camera = m_model->fullscreenVideoStreamModel())
-    {
-        auto left = updatedViewport.left();
-        auto top = updatedViewport.top();
-        auto right = updatedViewport.right();
-        auto bottom = updatedViewport.bottom();
+void VideoWidget::moveCenter(QPointF offset) {
+    if (auto firstStream = m_model->fullscreenVideoStreamModel()) {
+        const auto zoomAndPan = m_videoStreamZoomAndPan[firstStream];
 
-        // ToDo:: Rewrite this to something more readable!
-        if (left < 0)
-        {
-            double deltaX = abs(left);
-            left += deltaX;
-            right += deltaX;
-        }
-        if (right > 1.0)
-        {
-            double deltaX = abs(right - 1.0);
-            left -= deltaX;
-            right -= deltaX;
-        }
-
-        if (top < 0)
-        {
-            double deltaY = abs(top);
-            top += deltaY;
-            bottom += deltaY;
-        }
-        if (bottom > 1.0)
-        {
-            double deltaY = abs(bottom - 1.0);
-            top -= deltaY;
-            bottom -= deltaY;
-        }
-
-        QRectF viewport(left, top, right - left, bottom - top);
-
-        camera->setViewport(viewport);
+        // Invert Y
+        offset.ry() *= -1;
+        updateZoomAndPan(zoomAndPan.zoom, zoomAndPan.pan + offset);
     }
 }
 
-void VideoWidget::mouseMoveEvent(QMouseEvent* event)
-{
-    if (m_viewportManipulationEnabled)
-    {
+void VideoWidget::mouseMoveEvent(QMouseEvent* event) {
+    if (m_viewportManipulationEnabled) {
         // ignore synthesized mouse events when touch gesture is active
-        if (m_pinchGestureActive && event->source() != Qt::MouseEventNotSynthesized)
-        {
+        if (m_pinchGestureActive && event->source() != Qt::MouseEventNotSynthesized) {
             m_mouseMoveActive = true;
-            return;
+        } else if (!m_clickedPos.isNull() && event->buttons().testFlag(Qt::LeftButton)) {
+            // if we are not pressing the mouse button, or the button was not clicked on us, lets ignore it
+            auto position = event->globalPos();
+
+            // move stage item while restricting to limits when necessary
+            moveCenter(position - m_clickedPos);
+
+            // save click global position. we are using globalPos() instead of pos() to avoid shaking when widget moves
+            m_clickedPos = position;
+
+            // lets not forget to call base after we state that we have accepted this event
+            event->accept();
         }
-
-        // if we are not pressing the mouse button, or the button was not clicked on us, lets ignore it
-        if(m_clickedPos.isNull() || !event->buttons().testFlag(Qt::LeftButton))
-        {
-            return;
-        }
-
-        auto position = normalizeToVideoRect(event->globalPos());
-
-        // move stage item while restricting to limits when necessary
-        moveCenter(position - m_clickedPos);
-
-        // save click global position. we are using globalPos() instead of pos() to avoid shaking when widget moves
-        m_clickedPos = position;
-
-        // lets not forget to call base after we state that we have accepted this event
-        event->accept();
     }
 
     QWidget::mouseMoveEvent(event);
 }
 
-void VideoWidget::mousePressEvent(QMouseEvent* event)
-{
+void VideoWidget::mousePressEvent(QMouseEvent* event) {
     // ignore synthesized mouse events when touch gesture is active
-    if (m_pinchGestureActive && event->source() != Qt::MouseEventNotSynthesized)
-    {
-        return;
-    }
+    if (!m_pinchGestureActive || event->source() == Qt::MouseEventNotSynthesized) {
+        // make sure we are in front and visible
+        raise();
+        show();
 
-    // make sure we are in front and visible
-    raise();
-    show();
+        if (m_model->videoStreamState() == LiveCaptureModel::VideoStreamState::Running) {
+            // save click global position. we are using globalPos() instead of pos() to avoid shaking when widget moves
+            m_clickedPos = event->globalPos();
 
-    if(m_model->videoStreamState() == LiveCaptureModel::VideoStreamState::Running)
-    {
-        // save click global position. we are using globalPos() instead of pos() to avoid shaking when widget moves
-        m_clickedPos = normalizeToVideoRect(event->globalPos());
-
-        // lets not forget to call base after we state that we have accepted this event
-        event->accept();
-        QWidget::mousePressEvent(event);
+            // lets not forget to call base after we state that we have accepted this event
+            event->accept();
+            QWidget::mousePressEvent(event);
+        }
     }
 }
 
-void VideoWidget::mouseReleaseEvent(QMouseEvent *event)
-{
+void VideoWidget::mouseReleaseEvent(QMouseEvent *event) {
     // ignore mouse events synthesized from touch as we handle touch gestures explicitly
-    if (m_mouseMoveActive && event->source() != Qt::MouseEventNotSynthesized)
-    {
+    if (m_mouseMoveActive && event->source() != Qt::MouseEventNotSynthesized) {
         m_mouseMoveActive = false;
         return;
     }
 
     if (event->button() == Qt::LeftButton && !m_clickedPos.isNull()
-        && m_model->videoStreamState() == LiveCaptureModel::VideoStreamState::Running)
-    {
+            && m_model->videoStreamState() == LiveCaptureModel::VideoStreamState::Running) {
         // we calculate the new position
-        auto position = normalizeToVideoRect(event->globalPos());
+        auto position = event->globalPos();
 
         // update position with strict movement restriction to parent widget area
         moveCenter(position - m_clickedPos);
@@ -510,66 +524,57 @@ void VideoWidget::mouseReleaseEvent(QMouseEvent *event)
     }
 }
 
-bool VideoWidget::event(QEvent* event)
-{
-    switch (event->type()) {
-    case QEvent::Gesture: {
+bool VideoWidget::event(QEvent* event) {
+    if (event->type() == QEvent::Gesture) {
         return gestureEvent(static_cast<QGestureEvent*>(event));
-    }
     }
     return QWidget::event(event);
 }
 
-bool VideoWidget::gestureEvent(QGestureEvent *event)
-{
-    if (QGesture *pinch = event->gesture(Qt::PinchGesture))
+bool VideoWidget::gestureEvent(QGestureEvent *event) {
+    if(m_model->videoStreamState() == LiveCaptureModel::VideoStreamState::Running &&
+            m_model->captureState() == LiveCaptureModel::CaptureState::NotCapturing)
     {
-        pinchTriggered(static_cast<QPinchGesture *>(pinch));
-    }
-    else if (QGesture *pan = event->gesture(Qt::PanGesture))
-    {
-        panTriggered(static_cast<QPanGesture *>(pan));
-    }
+        if (QGesture *pinch = event->gesture(Qt::PinchGesture)) {
+            pinchTriggered(static_cast<QPinchGesture *>(pinch));
+        } else if (QGesture *pan = event->gesture(Qt::PanGesture)) {
+            panTriggered(static_cast<QPanGesture *>(pan));
+        }
 
-    event->accept();
+        event->accept();
+    }
     return true;
 }
 
-void VideoWidget::pinchTriggered(QPinchGesture *gesture)
-{
+void VideoWidget::pinchTriggered(QPinchGesture *gesture) {
     // track gesture state for workaround because pan gesture is not sent when pinch is not active
-    if (gesture->state() == Qt::GestureStarted)
-    {
-        if (auto camera = m_model->fullscreenVideoStreamModel())
-        {
-            m_startZoomFactor = 1.0 / camera->viewport().width();
+    if (gesture->state() == Qt::GestureStarted) {
+        if (auto firstStream = m_model->fullscreenVideoStreamModel()) {
+            const auto zoomAndPan = m_videoStreamZoomAndPan[firstStream];
+            m_startZoomFactor = zoomAndPan.zoom;
         }
 
         m_lastScaleFactor = gesture->totalScaleFactor();
         m_pinchGestureActive = true;
-    }
-    else if (gesture->state() == Qt::GestureFinished || gesture->state() == Qt::GestureCanceled)
-    {
+    } else if (gesture->state() == Qt::GestureFinished || gesture->state() == Qt::GestureCanceled) {
         m_pinchGestureActive = false;
     }
 
     QPinchGesture::ChangeFlags changeFlags = gesture->changeFlags();
     if (changeFlags & QPinchGesture::ScaleFactorChanged) {
-        auto point = normalizeToVideoRect(gesture->centerPoint().toPoint());
-
+        auto point = gesture->centerPoint().toPoint();
         zoomTo(point, m_startZoomFactor * (gesture->totalScaleFactor() - m_lastScaleFactor));
 
         m_lastScaleFactor = gesture->totalScaleFactor();
     }
     if (changeFlags & QPinchGesture::CenterPointChanged) {
-        auto delta = normalizeToVideoRect(gesture->centerPoint().toPoint()) -
-                     normalizeToVideoRect(gesture->lastCenterPoint().toPoint());
+        auto delta = gesture->centerPoint().toPoint() -
+                gesture->lastCenterPoint().toPoint();
         moveCenter(delta);
     }
 }
 
-void VideoWidget::panTriggered(QPanGesture *gesture)
-{
+void VideoWidget::panTriggered(QPanGesture *gesture) {
     Q_UNUSED(gesture)
     // TODO: Panning when pinching is incomplete. Panning when not pinching is handled via mouseMoveEvent
 }
@@ -599,7 +604,13 @@ void VideoWidget::stopThread()
     m_renderingThread.reset();
 }
 
-void VideoWidget::closeEvent(QCloseEvent* /*e*/)
+void VideoWidget::initializeGL()
+{
+    glEnable(GL_TEXTURE_2D);
+    startThread();
+}
+
+VideoWidget::~VideoWidget()
 {
     stopThread();
 }
