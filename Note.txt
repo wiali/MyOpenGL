@@ -41,3 +41,5 @@ https://github.com/Vouk/voukoder/blob/master/Voukoder/ExporterX264.cpp
 https://github.com/cppwrappers/LibAvCpp/tree/master/libavcpp
 
 https://github.com/gdkar/tinyav/tree/master/tinyav
+
+https://join.ucrtc.hp.com/meet/oto.ciulis/ZQF22NLS
